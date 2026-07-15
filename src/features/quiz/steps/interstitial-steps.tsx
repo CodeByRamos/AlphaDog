@@ -5,6 +5,7 @@ import { Check, ShieldCheck, Sparkles, Stethoscope, Users } from "lucide-react";
 import { AlphaDogMark } from "@/components/brand/logo";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { claimOffer } from "@/server/actions/offer";
 import { BREEDS } from "../funnel-config";
 import type { LoadingStep, ProfileStep, ScratchCardStep, StaticStep } from "../types";
 import { StepShell, type StepProps } from "./shell";
@@ -242,7 +243,7 @@ export function ScratchCardStepView({
 }: StepProps<ScratchCardStep>) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [revealed, setRevealed] = useState(false);
-  const discount = 40;
+  const [discount, setDiscount] = useState<number | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -281,9 +282,14 @@ export function ScratchCardStepView({
     for (let i = 3; i < data.length; i += 4 * 40) {
       if (data[i] === 0) clear++;
     }
-    if (clear / (data.length / (4 * 40)) > 0.42) {
+    if (clear / (data.length / (4 * 40)) > 0.42 && !revealed) {
       setRevealed(true);
-      onAnswer(String(discount));
+      // O servidor decide o desconto e a validade; aqui só exibimos.
+      void claimOffer("scratch-card").then((result) => {
+        if (!result.ok) return;
+        setDiscount(result.percentOff);
+        onAnswer(String(result.percentOff));
+      });
     }
   }
 
@@ -292,7 +298,7 @@ export function ScratchCardStepView({
       <div className="rounded-card border-alpha-500 relative mx-auto h-44 w-full max-w-sm overflow-hidden border-2 border-dashed bg-white">
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <p className="font-display text-alpha-600 text-5xl font-extrabold">
-            {discount}%
+            {discount === null ? "…" : `${discount}%`}
           </p>
           <p className="text-ink-500 mt-1 text-sm">de desconto no seu plano</p>
         </div>
@@ -310,8 +316,14 @@ export function ScratchCardStepView({
         />
       </div>
 
-      <Button size="lg" block className="mt-6" disabled={!revealed} onClick={onNext}>
-        {revealed ? step.cta : "Raspe para continuar"}
+      <Button
+        size="lg"
+        block
+        className="mt-6"
+        disabled={discount === null}
+        onClick={onNext}
+      >
+        {discount === null ? "Raspe para continuar" : step.cta}
       </Button>
     </StepShell>
   );
