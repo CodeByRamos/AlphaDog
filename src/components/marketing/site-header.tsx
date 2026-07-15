@@ -26,10 +26,8 @@ export function SiteHeader() {
             ))}
           </nav>
 
+          {/* "Entrar" volta aqui junto com a autenticação (depende do banco). */}
           <div className="flex items-center gap-2">
-            <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
-              <Link href={routes.signIn}>Entrar</Link>
-            </Button>
             <Button asChild size="sm" className="hidden sm:inline-flex">
               <Link href={routes.quiz}>Começar</Link>
             </Button>

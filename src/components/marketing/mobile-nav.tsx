@@ -62,18 +62,9 @@ export function MobileNav() {
             ))}
           </nav>
 
-          <div className="mt-auto space-y-3 p-5">
+          <div className="mt-auto p-5">
             <Button asChild size="lg" block onClick={() => setOpen(false)}>
               <Link href={routes.quiz}>Montar o plano do meu cão</Link>
-            </Button>
-            <Button
-              asChild
-              variant="outline"
-              size="lg"
-              block
-              onClick={() => setOpen(false)}
-            >
-              <Link href={routes.signIn}>Entrar</Link>
             </Button>
           </div>
         </div>

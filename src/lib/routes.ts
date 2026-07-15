@@ -17,11 +17,16 @@ export const routes = {
   guarantee: "/garantia",
 } as const;
 
+/**
+ * Navegação.
+ *
+ * Só entra aqui o que já existe. Jornal, guia de raças e especialistas estão
+ * definidos em `routes` mas fora da navegação de propósito: link para 404 é
+ * pior que ausência de link. Voltam quando as páginas existirem.
+ */
 export const navLinks = [
   { href: routes.method, label: "Método" },
   { href: routes.reviews, label: "Avaliações" },
-  { href: routes.journal, label: "Jornal" },
-  { href: routes.wiki, label: "Guia de raças" },
 ] as const;
 
 export const footerNav = [
@@ -30,15 +35,7 @@ export const footerNav = [
     links: [
       { href: routes.quiz, label: "Montar o plano" },
       { href: routes.method, label: "Método" },
-      { href: routes.experts, label: "Falar com especialista" },
       { href: routes.reviews, label: "Avaliações" },
-    ],
-  },
-  {
-    title: "Conteúdo",
-    links: [
-      { href: routes.journal, label: "Jornal" },
-      { href: routes.wiki, label: "Guia de raças" },
     ],
   },
   {

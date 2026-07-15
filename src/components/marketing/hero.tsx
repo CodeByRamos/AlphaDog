@@ -29,6 +29,7 @@ export function Hero() {
               {hero.subtitle}
             </p>
 
+            {/* O CTA secundário ("Já sou aluno") volta com a autenticação. */}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <Button asChild size="lg">
                 <Link href={routes.quiz}>{hero.ctaPrimary}</Link>
@@ -39,7 +40,7 @@ export function Hero() {
                 size="lg"
                 className="text-ink-300 hover:bg-ink-800 hover:text-bone"
               >
-                <Link href={routes.signIn}>{hero.ctaSecondary}</Link>
+                <Link href={routes.method}>Ver o método</Link>
               </Button>
             </div>
 

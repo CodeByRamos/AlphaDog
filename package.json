@@ -13,7 +13,9 @@
     "postinstall": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "check:links": "node scripts/check-links.mjs",
+    "brand": "node scripts/export-brand.mjs"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.8.0",
