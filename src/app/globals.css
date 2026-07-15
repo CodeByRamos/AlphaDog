@@ -1,0 +1,116 @@
+@import "tailwindcss";
+
+/*
+  AlphaDog design tokens.
+  ink   — base, autoridade e confiança
+  alpha — âmbar/medalha, recompensa e evolução (accent primário)
+  trust — índigo profundo, secundário
+  sage  — progresso e sucesso
+  bone  — neutro quente de fundo
+*/
+@theme {
+  --color-ink-50: #f5f6f8;
+  --color-ink-100: #e8eaef;
+  --color-ink-200: #c9cdd8;
+  --color-ink-300: #9aa1b4;
+  --color-ink-400: #6b7490;
+  --color-ink-500: #47506b;
+  --color-ink-600: #2e3650;
+  --color-ink-700: #1d2438;
+  --color-ink-800: #121826;
+  --color-ink-900: #0b0e14;
+  --color-ink-950: #05070b;
+
+  --color-alpha-50: #fef6ea;
+  --color-alpha-100: #fdeacd;
+  --color-alpha-200: #fad49b;
+  --color-alpha-300: #f6be69;
+  --color-alpha-400: #f3b24f;
+  --color-alpha-500: #f0a73c;
+  --color-alpha-600: #d98a22;
+  --color-alpha-700: #b26a18;
+  --color-alpha-800: #8a4f14;
+  --color-alpha-900: #633811;
+
+  --color-trust-50: #eef1f8;
+  --color-trust-100: #d8dfef;
+  --color-trust-200: #b0bede;
+  --color-trust-300: #7f93c2;
+  --color-trust-400: #5468a0;
+  --color-trust-500: #2b3a67;
+  --color-trust-600: #243157;
+  --color-trust-700: #1c2644;
+  --color-trust-800: #151c33;
+  --color-trust-900: #0e1322;
+
+  --color-sage-50: #eef7f4;
+  --color-sage-100: #d6ebe4;
+  --color-sage-200: #aed7ca;
+  --color-sage-300: #7cbcaa;
+  --color-sage-400: #57a48f;
+  --color-sage-500: #3e8e7e;
+  --color-sage-600: #327264;
+  --color-sage-700: #275a4f;
+  --color-sage-800: #1d443c;
+  --color-sage-900: #142f2a;
+
+  --color-bone: #f7f5f1;
+  --color-bone-dark: #efece5;
+
+  --font-display: var(--font-sora), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  --radius-card: 1rem;
+  --radius-field: 0.75rem;
+
+  --shadow-card: 0 1px 2px rgb(11 14 20 / 0.04), 0 8px 24px -8px rgb(11 14 20 / 0.12);
+  --shadow-lift: 0 2px 4px rgb(11 14 20 / 0.06), 0 18px 42px -12px rgb(11 14 20 / 0.22);
+
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    background-color: var(--color-bone);
+    color: var(--color-ink-900);
+    font-family: var(--font-sans);
+    text-rendering: optimizeLegibility;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+
+  /* Foco visível e consistente em todo o produto. */
+  :focus-visible {
+    outline: 2px solid var(--color-alpha-500);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::selection {
+    background-color: var(--color-alpha-200);
+    color: var(--color-ink-900);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
