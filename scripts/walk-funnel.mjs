@@ -6,9 +6,6 @@ import { chromium } from "playwright";
  * Verifica que todo passo renderiza, que a navegação avança, que os passos
  * condicionais de filhote aparecem e que o funil termina na oferta.
  */
-const OUT =
-  "C:/Users/Ramos/AppData/Local/Temp/claude/C--Users-Ramos-Documents-AlphaDog/f1c9f93a-6bba-468b-875e-170c8e2f81a5/scratchpad";
-
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
 
@@ -19,16 +16,6 @@ page.on("console", (m) => m.type() === "error" && errors.push(`console: ${m.text
 await page.goto("http://localhost:3000/quiz", { waitUntil: "networkidle" });
 
 const seen = [];
-const shots = new Set([
-  "petAge",
-  "petBreed",
-  "failed_to_train_dog",
-  "problems",
-  "profile",
-  "magic",
-  "email",
-  "scratch-card",
-]);
 
 for (let i = 0; i < 60; i++) {
   if (page.url().includes("/oferta")) break;
