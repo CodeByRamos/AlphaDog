@@ -18,6 +18,8 @@ page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
 
 await page.goto("http://localhost:3000/quiz", { waitUntil: "networkidle" });
 
+let scratched = false;
+
 for (let i = 0; i < 60 && !page.url().includes("/oferta"); i++) {
   const title = (
     await page
@@ -36,9 +38,13 @@ for (let i = 0; i < 60 && !page.url().includes("/oferta"); i++) {
     continue;
   }
 
+  // Uma raspada só: depois do reveal a canvas continua no DOM (opacity-0) e o
+  // loop tentaria raspar de novo um elemento que já está sendo desmontado.
   const canvas = page.locator("canvas");
-  if ((await canvas.count()) > 0 && (await canvas.first().isVisible())) {
+  if (!scratched && (await canvas.count()) > 0 && (await canvas.first().isVisible())) {
+    scratched = true;
     const box = await canvas.first().boundingBox();
+    if (!box) continue;
     await page.mouse.move(box.x + 12, box.y + 20);
     await page.mouse.down();
     for (let y = 12; y < box.height; y += 10) {
