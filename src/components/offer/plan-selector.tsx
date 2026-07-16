@@ -10,6 +10,7 @@ import {
   type PlanPricing,
 } from "@/features/billing/pricing";
 import { cn } from "@/lib/utils";
+import { PaymentMethodPicker } from "./payment-method-picker";
 
 export function PlanSelector({ pricing }: { pricing: PlanPricing[] }) {
   const [selected, setSelected] = useState<PlanId>(DEFAULT_PLAN_ID);
@@ -72,6 +73,10 @@ export function PlanSelector({ pricing }: { pricing: PlanPricing[] }) {
           );
         })}
       </ul>
+
+      <div className="border-ink-100 mt-6 border-t pt-6">
+        <PaymentMethodPicker />
+      </div>
 
       <Button size="lg" block className="mt-6">
         Começar o treino do meu cão

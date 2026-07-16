@@ -4,18 +4,51 @@
  */
 
 export const hero = {
-  eyebrow: "Método positivo, baseado em ciência",
-  title: "Seu cão não precisa de mais gritos. Precisa de um plano.",
-  subtitle:
-    "O AlphaDog monta um programa de adestramento sob medida para a raça, a idade e o comportamento do seu cão — em sessões de 10 minutos que cabem no seu dia.",
+  /**
+   * Selo do hero. A referência exibe um prêmio ("#1 Product of the Day"); aqui
+   * é uma afirmação verificável sobre o método, porque inventar premiação é
+   * propaganda enganosa.
+   */
+  badge: { label: "Método positivo", text: "Sem coleira de choque, sem grito" },
+  eyebrow: "Seja um tutor melhor com",
+  title: "Adestramento moderno e personalizado",
   ctaPrimary: "Montar o plano do meu cão",
-  ctaSecondary: "Já sou aluno",
-  disclaimer: "Leva 2 minutos. Sem cartão de crédito.",
-  pillars: [
-    { title: "Feito para o seu cão", description: "Raça, idade e rotina" },
-    { title: "Criado por especialistas", description: "Adestradores certificados" },
-    { title: "No seu ritmo", description: "10 minutos por dia" },
+  ctaSecondary: "Ver o método",
+  features: [
+    { icon: "paw", label: "O cão em primeiro lugar" },
+    { icon: "cap", label: "Guiado por especialistas" },
+    { icon: "clock", label: "Acesso 24 horas" },
   ],
+  /** Tela do app dentro do mockup. */
+  phone: {
+    tagline: "Seja um tutor melhor",
+    cta: "Começar agora",
+    footnote: "Já treina com a gente?",
+    footnoteLink: "Entrar",
+  },
+} as const;
+
+/**
+ * Cards que flutuam ao redor do celular.
+ *
+ * Cada um mostra uma função que o produto realmente tem (ver `features`) — a
+ * referência anuncia um assistente de IA que nós não construímos, e anunciar
+ * função inexistente é o mesmo problema do prêmio inventado.
+ */
+export const heroCards = {
+  command: { title: "Comando", name: "Senta", badge: "Dominado" },
+  streak: { title: "Sequência diária", value: "12 dias" },
+  program: {
+    title: "Programa de treino",
+    rows: ["Atenção no nome", "Senta com distração", "Passeio na guia"],
+  },
+  experts: { title: "Especialistas", cta: "Falar com especialista" },
+  lesson: { title: "Vídeo-aula", name: "Vem aqui", duration: "10 min" },
+  tip: {
+    title: "Dica do dia",
+    body: "Termine sempre num acerto — nunca numa falha.",
+    cta: "Próxima",
+  },
 } as const;
 
 export const stats = [

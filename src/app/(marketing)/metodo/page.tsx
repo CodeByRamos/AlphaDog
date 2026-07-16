@@ -61,15 +61,15 @@ const steps = [
 export default function MethodPage() {
   return (
     <>
-      <Section className="bg-ink-900 text-bone">
+      <Section className="bg-bone border-ink-100 border-b">
         <Container width="narrow">
-          <p className="text-alpha-500 text-sm font-bold tracking-[0.12em] uppercase">
+          <p className="text-alpha-700 text-sm font-bold tracking-[0.12em] uppercase">
             Nosso método
           </p>
           <h1 className="mt-4 text-4xl sm:text-5xl">
             Cão não aprende apanhando. Aprende acertando.
           </h1>
-          <p className="text-ink-300 mt-6 max-w-2xl text-lg leading-relaxed">
+          <p className="text-ink-500 mt-6 max-w-2xl text-lg leading-relaxed">
             O AlphaDog é construído sobre reforço positivo e ciência do comportamento
             animal — as mesmas bases usadas para treinar cães de detecção, de
             assistência e de resgate. Não é bondade: é o que funciona melhor.

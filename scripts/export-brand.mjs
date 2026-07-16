@@ -61,6 +61,52 @@ for (const size of [512, 192, 180, 48, 32, 16]) {
   await png(tileSvg(size), `icone-${size}.png`);
 }
 
+/**
+ * Placeholder da foto dentro do celular do hero.
+ *
+ * PROVISÓRIO. O lugar pede uma foto real de cães felizes, na proporção e no
+ * enquadramento da tela. Este arquivo existe só para o layout não depender de
+ * um asset ausente — trocar por foto real é substituir o PNG, sem tocar em
+ * código.
+ */
+function heroAppSvg() {
+  const w = 552;
+  const h = 1120;
+  const paws = Array.from({ length: 26 }, (_, i) => {
+    // Distribuição determinística: sem random, o arquivo é reproduzível.
+    const x = ((i * 137) % (w - 80)) + 40;
+    const y = ((i * 263) % (h - 120)) + 60;
+    const s = 0.5 + ((i * 37) % 60) / 100;
+    const o = 0.05 + ((i * 17) % 8) / 100;
+    return `<g transform="translate(${x} ${y}) scale(${s.toFixed(2)}) rotate(${(i * 23) % 360})" opacity="${o.toFixed(2)}">
+      <circle cx="0" cy="6" r="7" fill="#fff"/>
+      <circle cx="-8" cy="-4" r="3.4" fill="#fff"/>
+      <circle cx="-2.6" cy="-8" r="3.4" fill="#fff"/>
+      <circle cx="3.4" cy="-8" r="3.4" fill="#fff"/>
+      <circle cx="8.6" cy="-4" r="3.4" fill="#fff"/>
+    </g>`;
+  }).join("");
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+    <defs>
+      <linearGradient id="g" x1="0" y1="0" x2="0.6" y2="1">
+        <stop offset="0" stop-color="#57A48F"/>
+        <stop offset="0.55" stop-color="#3E8E7E"/>
+        <stop offset="1" stop-color="#1D443C"/>
+      </linearGradient>
+      <radialGradient id="glow" cx="0.5" cy="0.36" r="0.62">
+        <stop offset="0" stop-color="#F0A73C" stop-opacity="0.30"/>
+        <stop offset="1" stop-color="#F0A73C" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+    <rect width="${w}" height="${h}" fill="url(#g)"/>
+    <rect width="${w}" height="${h}" fill="url(#glow)"/>
+    ${paws}
+  </svg>`;
+}
+
+await png(heroAppSvg(), "hero-app-dogs.png");
+
 // ---- Lockups com a Sora real, via navegador ----
 
 const browser = await chromium.launch();

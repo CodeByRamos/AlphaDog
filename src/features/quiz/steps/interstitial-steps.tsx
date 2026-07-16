@@ -192,14 +192,14 @@ export function ProfileStepView({ step, answers, onNext }: StepProps<ProfileStep
 
   return (
     <StepShell title={step.title}>
-      <div className="bg-ink-900 text-bone rounded-card shadow-lift p-7">
+      <div className="border-ink-100 rounded-card shadow-card border bg-white p-7">
         <div className="flex items-center gap-4">
-          <span className="bg-alpha-500/15 flex size-14 items-center justify-center rounded-full">
-            <AlphaDogMark className="text-alpha-500 size-8" />
+          <span className="bg-alpha-50 flex size-14 items-center justify-center rounded-full">
+            <AlphaDogMark className="text-alpha-600 size-8" />
           </span>
           <div>
             <p className="font-display text-2xl font-extrabold">{name}</p>
-            <p className="text-ink-400 text-sm">
+            <p className="text-ink-500 text-sm">
               {breed} · {age}
             </p>
           </div>
@@ -209,12 +209,12 @@ export function ProfileStepView({ step, answers, onNext }: StepProps<ProfileStep
           {scores.map((score) => (
             <div key={score.label}>
               <div className="mb-2 flex items-baseline justify-between">
-                <dt className="text-ink-300 text-sm">{score.label}</dt>
-                <dd className="font-display text-alpha-500 text-sm font-bold">
+                <dt className="text-ink-500 text-sm">{score.label}</dt>
+                <dd className="font-display text-alpha-700 text-sm font-bold">
                   {score.value}% → {score.target}%
                 </dd>
               </div>
-              <div className="bg-ink-700 h-2 overflow-hidden rounded-full">
+              <div className="bg-ink-100 h-2 overflow-hidden rounded-full">
                 <div
                   className="bg-alpha-500 h-full rounded-full transition-[width] duration-700 ease-[var(--ease-out-quart)]"
                   style={{ width: `${score.value}%` }}

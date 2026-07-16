@@ -25,16 +25,16 @@ export function Countdown({ expiresAt }: { expiresAt: string }) {
   const seconds = String(totalSeconds % 60).padStart(2, "0");
 
   return (
-    <div className="bg-ink-900 text-bone sticky top-0 z-20">
+    <div className="bg-alpha-50 border-alpha-200 text-ink-700 sticky top-0 z-20 border-b">
       <div className="mx-auto flex max-w-2xl items-center justify-center gap-3 px-5 py-3 text-sm">
-        <Timer aria-hidden className="text-alpha-500 size-4" />
+        <Timer aria-hidden className="text-alpha-700 size-4" />
         {expired ? (
           <span>Seu desconto expirou — recarregue para ver o preço atual.</span>
         ) : (
           <>
-            <span className="text-ink-300">Preço reservado por</span>
+            <span className="text-ink-500">Preço reservado por</span>
             <span
-              className="font-display text-alpha-500 text-base font-extrabold tabular-nums"
+              className="font-display text-alpha-800 text-base font-extrabold tabular-nums"
               aria-live="off"
             >
               {minutes}:{seconds}
