@@ -1,6 +1,20 @@
 @import "tailwindcss";
 
 /*
+  Fontes de conteúdo, declaradas explicitamente.
+
+  O Tailwind v4 descobre as fontes sozinho a partir da raiz do repositório. Num
+  monorepo isso o faz varrer apps/, services/ e packages/ inteiros — lento — ou
+  perder arquivos, dependendo de onde o build roda. Sem esta diretiva as classes
+  somem sem erro nenhum: o build passa, a página renderiza, e o site fica sem
+  estilo.
+*/
+@source "./**/*.{ts,tsx}";
+@source "../components/**/*.{ts,tsx}";
+@source "../features/**/*.{ts,tsx}";
+@source "../lib/**/*.{ts,tsx}";
+
+/*
   AlphaDog design tokens.
   ink   — base, autoridade e confiança
   alpha — âmbar/medalha, recompensa e evolução (accent primário)

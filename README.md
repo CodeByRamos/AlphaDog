@@ -1,61 +1,88 @@
 # AlphaDog
 
-SaaS brasileiro de adestramento de cães. Gera um programa personalizado a partir
-da raça, idade e comportamento do cão, entregue em aulas curtas com método
-positivo e acompanhamento de especialistas.
+Plataforma brasileira de adestramento de cães. Duas metades:
 
-## Stack
+1. **Aquisição** — landing, quiz de 43 passos e paywall personalizado. Existe e
+   funciona.
+2. **Produto** — treinador com visão computacional que acompanha o treino pela
+   câmera e dá feedback em tempo real. Em fase de spike.
 
-| Camada | Escolha |
-| --- | --- |
-| Framework | Next.js 16 (App Router, RSC, Server Actions) |
-| Linguagem | TypeScript strict |
-| Estilo | Tailwind CSS v4 (tokens em `src/app/globals.css`) |
-| Banco | PostgreSQL + Prisma |
-| Auth | Auth.js v5 |
-| Pagamentos | Stripe (PIX + cartão) |
-| i18n | next-intl — pt-BR |
+## Monorepo
 
-## Como rodar
+```
+apps/
+  website/      Next.js 16 — landing, funil, oferta, área do cliente
+services/
+  ai/           Treino e export dos modelos de visão (Python)
+scripts/        Verificação: screenshots, links quebrados, walk do funil
+docs/           PENDENCIAS.md — o que exige ação humana
+```
+
+`apps/mobile`, `apps/admin`, `services/api` e `packages/*` entram quando o spike
+de IA passar. Criar pasta vazia antes da hora só gera manutenção.
+
+## Rodar
 
 ```bash
-npm install
-cp .env.example .env.local   # preencha as variáveis
-npm run dev
+pnpm install
+pnpm dev            # website em localhost:3000
 ```
-
-Disponível em `http://localhost:3000`.
 
 ```bash
-npm run build     # build de produção
-npm run lint      # eslint
-npx tsc --noEmit  # checagem de tipos
+pnpm build          # todos os workspaces
+pnpm lint
+pnpm typecheck
+pnpm check:links    # falha se algum link interno der 404
 ```
 
-## Arquitetura
+Sem `DATABASE_URL` o site roda com stores em memória — nada é persistido. Ver
+[docs/PENDENCIAS.md](docs/PENDENCIAS.md).
 
+### IA
+
+Python puro, fora do workspace pnpm:
+
+```bash
+cd services/ai
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install -e ".[dev]"
+.venv\Scripts\python.exe -m pytest tests -q
 ```
-src/
-  app/           rotas (App Router)
-  components/
-    brand/       marca AlphaDog
-    ui/          primitivos do design system
-  features/      domínio (quiz, billing, program, content)
-  lib/           utilitários e configuração
-  server/        actions, acesso a dados, serviços
-```
 
-### Funil orientado a configuração
+## Decisões que valem saber
 
-O funil de onboarding é a peça central do produto. Cada passo é um registro
-`{ key, order, type, config }` e o `type` resolve num componente registrado no
-**step registry** (`src/features/quiz/`). Adicionar um passo significa adicionar
-configuração — nunca um componente novo. É isso que permite rodar dezenas de
+**O funil é orientado a configuração.** Cada passo é `{ key, order, type, config }`
+e o `type` resolve num componente do registry (`features/quiz/`). Adicionar
+passo é adicionar configuração, nunca componente. É o que permite dezenas de
 passos e variantes de teste A/B sem inchar o código.
+
+**O desconto é decidido no servidor.** O cliente dispara o resgate mas nunca
+informa o percentual — senão qualquer um escolheria o próprio preço no devtools.
+
+**A inferência de IA é on-device.** `services/ai` treina e exporta; não infere em
+runtime. Mandar vídeo para servidor mataria o tempo real, queimaria 4G caro e
+vídeo do interior da casa do tutor é dado pessoal sob a LGPD.
+
+**O gate da IA tem dois níveis.** BUILD prova que o pipeline funciona; PRODUÇÃO
+prova que serve ao mercado brasileiro (SRD). Hoje BUILD passa e PRODUÇÃO não —
+por decisão consciente, com o débito registrado em código.
+
+## Antes de ir ao ar
+
+Leia [docs/PENDENCIAS.md](docs/PENDENCIAS.md). Resumo do que bloqueia:
+
+- A prova social do site é **inventada** e precisa sair ou ser substituída
+- Os textos legais têm `[RAZÃO SOCIAL]`/`[CNPJ]` como marcador e precisam de
+  revisão jurídica
+- O hero usa um placeholder no lugar da foto de cães
 
 ## Identidade
 
 A marca é um escudo que também lê como cabeça de cão, com um chevron ascendente
 vazado — o "A" de Alpha, uma divisa de patente e uma seta de evolução ao mesmo
 tempo. Paleta: `ink` (autoridade), `alpha` (âmbar — recompensa e progresso),
-`trust`, `sage` e `bone`. Tipografia: Sora nos títulos, Inter no corpo.
+`trust`, `sage` e `bone`. Sora nos títulos, Inter no corpo.
+
+```bash
+pnpm brand    # reexporta os PNGs da marca
+```

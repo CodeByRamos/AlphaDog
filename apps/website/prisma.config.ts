@@ -1,10 +1,17 @@
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { config } from "dotenv";
 import { defineConfig } from "prisma/config";
 
+// Ancorado neste arquivo, não no cwd: o Turborepo roda da raiz do monorepo, e
+// caminho relativo apontaria para o lugar errado — silenciosamente, porque o
+// dotenv não reclama de arquivo ausente.
+const here = dirname(fileURLToPath(import.meta.url));
+
 // O Next carrega .env.local sozinho; a CLI do Prisma não. Carregamos os dois
 // aqui para que exista uma única fonte de variáveis no projeto.
-config({ path: ".env.local" });
-config();
+config({ path: resolve(here, ".env.local") });
+config({ path: resolve(here, ".env") });
 
 /**
  * Configuração do Prisma 7 — as URLs de conexão saíram do schema.
@@ -23,7 +30,7 @@ config();
 const PLACEHOLDER = "postgresql://sem-credencial@localhost:5432/alphadog";
 
 export default defineConfig({
-  schema: "prisma/schema.prisma",
+  schema: resolve(here, "prisma/schema.prisma"),
   datasource: {
     url: process.env.DIRECT_URL ?? process.env.DATABASE_URL ?? PLACEHOLDER,
   },

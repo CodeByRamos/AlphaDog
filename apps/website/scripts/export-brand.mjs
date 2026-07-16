@@ -1,6 +1,13 @@
 import { mkdirSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import sharp from "sharp";
+
+// Ancorado neste arquivo, não no cwd. Com caminho relativo, rodar da raiz do
+// monorepo criaria um `public/brand` no lugar errado — sem erro, porque
+// mkdirSync(recursive) cria o que faltar.
+const WEBSITE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 /**
  * Exporta os PNGs da marca para public/brand.
@@ -11,7 +18,7 @@ import sharp from "sharp";
  * silencioso que ninguém nota até o arquivo chegar no cliente.
  */
 
-const OUT = "public/brand";
+const OUT = resolve(WEBSITE_ROOT, "public/brand");
 mkdirSync(OUT, { recursive: true });
 
 const INK = "#0B0E14";

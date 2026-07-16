@@ -1,0 +1,26 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# services/ai is Python. It stays out of the pnpm workspace on purpose: it has
+# its own pyproject.toml and does not belong in the Turborepo build graph.
+
+# pnpm blocks dependency build scripts by default -- a barrier against supply
+# chain attacks, where a compromised package runs arbitrary code on install.
+# Each `true` below is a deliberate authorization; nothing outside this list
+# executes.
+#
+# NOTE: pnpm rewrites this file on install and mangles non-ASCII, so keep the
+# comments here in ASCII.
+allowBuilds:
+  # Native image binary. Used by next/image and the brand export script.
+  sharp: true
+  # Fetch the Prisma engines. The client cannot be generated without them.
+  prisma: true
+  "@prisma/engines": true
+  # Native SWC binary -- this is Next's compiler.
+  "@swc/core": true
+  # ESLint's native resolver.
+  unrs-resolver: true
+  # Turborepo's file watcher.
+  "@parcel/watcher": true

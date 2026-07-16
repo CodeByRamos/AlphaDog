@@ -1,51 +1,26 @@
 {
   "name": "alphadog",
-  "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@11.13.1",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint",
-    "typecheck": "tsc --noEmit",
-    "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
-    "shot": "node scripts/shot.mjs",
-    "postinstall": "prisma generate",
-    "db:migrate": "prisma migrate dev",
-    "db:push": "prisma db push",
-    "db:studio": "prisma studio",
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "format": "prettier --write \"**/*.{ts,tsx,css,md}\" --ignore-path .gitignore",
     "check:links": "node scripts/check-links.mjs",
-    "brand": "node scripts/export-brand.mjs"
-  },
-  "dependencies": {
-    "@prisma/adapter-pg": "^7.8.0",
-    "@prisma/client": "^7.8.0",
-    "@radix-ui/react-slot": "^1.3.0",
-    "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
-    "lucide-react": "^1.24.0",
-    "next": "16.2.10",
-    "next-intl": "^4.13.2",
-    "react": "19.2.4",
-    "react-dom": "19.2.4",
-    "server-only": "^0.0.1",
-    "tailwind-merge": "^3.6.0",
-    "zod": "^4.4.3"
+    "shot": "node scripts/shot.mjs",
+    "baseline": "node scripts/baseline.mjs",
+    "brand": "pnpm --filter @alphadog/website brand"
   },
   "devDependencies": {
-    "@playwright/test": "^1.61.1",
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "dotenv": "^17.4.2",
-    "eslint": "^9",
-    "eslint-config-next": "16.2.10",
+    "@playwright/test": "^1.49.0",
+    "playwright": "^1.49.0",
     "prettier": "^3.9.5",
     "prettier-plugin-tailwindcss": "^0.8.0",
-    "prisma": "^7.8.0",
-    "sharp": "^0.35.3",
-    "tailwindcss": "^4",
-    "typescript": "^5"
+    "turbo": "^2.3.0"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

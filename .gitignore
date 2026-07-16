@@ -1,24 +1,21 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# Padrões sem barra inicial casam em qualquer nível — necessário no monorepo,
+# porque .next e node_modules agora vivem dentro de apps/*.
 
-# dependencies
-/node_modules
-/.pnp
+# dependências
+node_modules/
+.pnp
 .pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
 
-# testing
-/coverage
+# testes
+coverage/
 
 # next.js
-/.next/
-/out/
+.next/
+out/
+build/
 
-# production
-/build
+# turborepo
+.turbo/
 
 # misc
 .DS_Store
@@ -30,7 +27,7 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env: nunca versionar credencial. O .env.example é o modelo e fica vazio.
 .env*
 !.env.example
 
@@ -41,14 +38,21 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# artefatos de screenshot local
+# client gerado pelo prisma.
+# Precisa do `**/`: padrão com barra no meio ancora na raiz do repo, então
+# `src/generated/` não casaria em apps/website/src/generated/.
+**/src/generated/
+
+# artefatos locais de verificação
 /screenshots
+/.baseline
 
-# client gerado pelo prisma
-/src/generated
-
-# python
+# python (services/ai)
 .venv/
 __pycache__/
 *.egg-info/
 .pytest_cache/
+
+# dataset: pesado e sob licença própria — nunca versionar
+services/ai/data/
+services/ai/runs/
