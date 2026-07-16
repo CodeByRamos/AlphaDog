@@ -9,14 +9,46 @@ sob a LGPD. Aqui só treinamos e exportamos.
 
 ## Estado: Fase 0 (spike de viabilidade)
 
-Nenhum modelo treinado ainda. O que existe é a **lógica de decisão** e o
-**harness que julga o spike** — ambos rodam sem GPU e sem dataset.
+Nenhum modelo treinado ainda. O que existe já roda e está testado (57 testes):
+
+- **Lógica de decisão** — `posture.py`, `exercise.py`
+- **Gate do spike** — `evaluation.py`
+- **Pipeline de dados** — `dataset.py` + `scripts/prepare_dataset.py`
+- **Treino e export** — `scripts/train.py`
+
+Tudo isso roda sem GPU e sem dataset. Só o treino em si precisa dos dois.
 
 ```bash
 python -m venv .venv
 .venv\Scripts\python.exe -m pip install -e ".[dev]"
 .venv\Scripts\python.exe -m pytest tests -q
 ```
+
+## O que precisa de você
+
+Eu não consigo fazer estes quatro — dependem de acesso, hardware ou coleta:
+
+| # | O quê | Como |
+| --- | --- | --- |
+| 1 | **Acesso ao StanfordExtra** | Formulário em [github.com/benjiebob/StanfordExtra](https://github.com/benjiebob/StanfordExtra). Rende `StanfordExtra_v12.json` |
+| 2 | **Stanford Dogs** (imagens, ~750 MB) | [vision.stanford.edu/aditya86/ImageNetDogs](http://vision.stanford.edu/aditya86/ImageNetDogs/) |
+| 3 | **GPU** | Colab (T4 grátis) ou RunPod. Não há GPU nesta máquina; em CPU o treino leva dias |
+| 4 | **Android intermediário** | Para medir FPS de verdade. Emulador não serve |
+
+Com (1) e (2) na mão:
+
+```bash
+python scripts/prepare_dataset.py \
+  --json data/StanfordExtra_v12.json \
+  --images data/stanford_dogs/Images \
+  --out data/yolo
+
+# Este roda no Colab, não aqui.
+python scripts/train.py --data data/yolo/dogs.yaml --epochs 100
+```
+
+O `prepare_dataset.py` é seguro de rodar localmente: não baixa nada, valida a
+entrada e falha alto se os caminhos estiverem errados.
 
 ## Por que a lógica vem antes do modelo
 
@@ -52,26 +84,45 @@ sentar sempre oclui.
 permanência mínima. Um frame ruim no meio de vinte bons não quebra a
 permanência; alternância constante nunca vira sucesso.
 
-## O gate
+## O gate, em dois níveis
 
 `evaluation.py` codifica os critérios **decididos antes de existir modelo**, para
 que não sejam negociados depois que os números aparecerem.
 
-| Métrica | Limite |
-| --- | --- |
-| Acurácia (entre frames comprometidos) | ≥ 90% |
-| Falso positivo | **≤ 2%** (bloqueante) |
-| Abstenção | ≤ 35% |
-| Queda em SRD | ≤ 10pp |
-| FPS em Android intermediário | ≥ 15 |
-| Latência p95 | ≤ 300ms |
+| Métrica | Limite | BUILD | PRODUÇÃO |
+| --- | --- | :---: | :---: |
+| Acurácia (entre frames comprometidos) | ≥ 90% | ✓ | ✓ |
+| Falso positivo | **≤ 2%** | ✓ | ✓ |
+| Abstenção | ≤ 35% | ✓ | ✓ |
+| FPS em Android intermediário | ≥ 15 | ✓ | ✓ |
+| Latência p95 | ≤ 300ms | ✓ | ✓ |
+| Queda em SRD | ≤ 10pp | — | ✓ |
 
-Falso positivo é medido **separado** da acurácia de propósito: um modelo com 95%
-de acerto que mente 5% das vezes é reprovado. Para um produto que autoriza
+**BUILD** prova que o pipeline funciona. **PRODUÇÃO** prova que serve ao mercado
+brasileiro. A build atual treina só com raça pura, então PRODUÇÃO fica
+bloqueada por decisão consciente — e o relatório diz isso em voz alta:
+
+```
+queda em SRD      PENDENTE — sem dataset brasileiro
+
+BUILD       PASSOU
+PRODUÇÃO    NÃO PASSOU
+
+Pendências para produção:
+  - sem dados de SRD — não validado para o mercado brasileiro
+```
+
+O padrão de `passes()` é `PRODUCTION`: quem quiser o critério frouxo pede
+explicitamente, e fica registrado na chamada.
+
+Falso positivo é medido **separado** da acurácia de propósito. Um modelo com 95%
+de acerto que mente 5% das vezes é reprovado: para um produto que autoriza
 recompensa, mentir é pior que errar.
 
-`SpikeReport.passes()` retorna `False` quando **faltam** dados de SRD ou de
-desempenho. Spike incompleto não é spike aprovado.
+E há um caso que só a métrica segmentada pega — está no teste
+`test_unbalanced_data_hides_srd_failure_in_the_aggregate`: com 900 imagens de
+raça pura e 100 de SRD, o agregado mostra 98,8% de acerto e 1,2% de falso
+positivo, passando em qualquer slide, enquanto o modelo erra 12% dos vira-latas.
 
 ## Escolhas de dataset
 
@@ -82,16 +133,32 @@ deriva do Stanford Dogs (20.580 imgs, 120 raças), que alimenta o classificador
 de raça. AP-10K serve como pré-treino.
 
 **Ressalva que decide o produto:** o StanfordExtra é feito de 120 raças
-**puras**. Metade dos cães brasileiros é SRD. Se o modelo não generalizar para
-vira-lata, ele não serve ao nosso mercado — por melhor que seja o número
-agregado. É a pergunta mais importante do spike.
+**puras**. Metade dos cães brasileiros é SRD.
 
-## O que falta para rodar o spike de verdade
+Decisão tomada: **seguir com esta build assim mesmo**, e tratar SRD depois. O
+gate reflete isso — BUILD passa, PRODUÇÃO não. O débito está codificado, não
+esquecido.
 
-- [ ] Acesso ao StanfordExtra (exige formulário)
-- [ ] GPU para treinar (Colab ou RunPod — não há GPU local)
-- [ ] Vídeos de cães brasileiros reais, **incluindo SRD**
-- [ ] Celular Android intermediário para medir FPS (não emulador)
+## Débito conhecido: SRD
 
-Sem estes quatro itens, o veredito do spike não existe — só a lógica que o
-julgará.
+O plano para fechar, quando for a hora:
+
+1. **Medir primeiro.** Rodar o modelo treinado contra vídeos de vira-lata e ver
+   o tamanho real da queda. Pode ser menor que o temido — pose depende de
+   estrutura esquelética, e SRD tem a mesma de qualquer cão. Ou pode ser grande,
+   por pelagem e proporções fora da distribuição. **Não dá para saber sem medir.**
+2. **Se a queda for pequena (≤10pp):** só documentar e seguir.
+3. **Se for grande:** anotar keypoints em imagens de SRD brasileiro e fazer
+   fine-tune. Centenas de imagens bem anotadas valem mais que milhares
+   ruidosas; o `stratified_split` já separa por raça e aceita "SRD" como uma.
+
+O caminho mais barato de coleta é o próprio produto: tutores filmando os
+próprios cães. Isso exige consentimento explícito e base legal sob a LGPD —
+vídeo do interior da casa é dado pessoal. Não é decisão de engenharia.
+
+## Ordem correta de execução
+
+O gate roda sobre o modelo **exportado e quantizado**, nunca sobre o `.pt`. A
+quantização INT8 é o que traz o FPS ao alvo em aparelho intermediário — e é
+também onde a acurácia cai. Medir no `.pt` mediria um modelo que não vai para
+produção.

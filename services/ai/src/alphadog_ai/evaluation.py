@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
+from enum import StrEnum
 
 from .posture import Posture, PostureReading
 
@@ -134,6 +135,28 @@ class PerformanceMetrics:
         return self.fps >= MIN_FPS and self.p95_latency_ms <= MAX_LATENCY_MS
 
 
+#: Queda máxima de acurácia em SRD, em pontos percentuais.
+MAX_MIXED_BREED_GAP = 10.0
+
+
+class Gate(StrEnum):
+    """Dois níveis de aprovação, com exigências diferentes.
+
+    A separação existe porque a build inicial treina com StanfordExtra, que é
+    feito de 120 raças puras. Validar em SRD exige um dataset brasileiro que
+    ainda não temos — decisão consciente de seguir sem ele por ora.
+
+    O ponto do gate duplo é que o débito não some: BUILD passa sem dados de SRD,
+    PRODUCTION não. Ninguém lança para o mercado brasileiro achando que estava
+    aprovado.
+    """
+
+    #: Só critérios técnicos. Prova que o pipeline funciona.
+    BUILD = "build"
+    #: Inclui aptidão de mercado. Necessário para colocar na mão de tutor.
+    PRODUCTION = "production"
+
+
 @dataclass(frozen=True)
 class SpikeReport:
     """Veredito do spike. Sem número medido, não passou."""
@@ -147,24 +170,61 @@ class SpikeReport:
     def mixed_breed_gap(self) -> float | None:
         """Quanto a acurácia cai em SRD, em pontos percentuais.
 
-        Metade dos cães brasileiros é vira-lata, e o StanfordExtra é feito de
-        120 raças puras. Se a queda for grande, o modelo não serve ao mercado —
-        por melhor que seja o número agregado.
+        Metade dos cães brasileiros é vira-lata e o StanfordExtra é feito de
+        raças puras. Se a queda for grande, o modelo não serve ao mercado — por
+        melhor que seja o número agregado.
         """
         if not self.purebred or not self.mixed_breed:
             return None
         return (self.purebred.accuracy - self.mixed_breed.accuracy) * 100
 
-    def passes(self) -> bool:
+    def passes(self, gate: Gate = Gate.PRODUCTION) -> bool:
+        """Avalia contra o gate pedido.
+
+        O padrão é PRODUCTION de propósito: quem quiser o critério mais frouxo
+        precisa pedir explicitamente, e fica registrado na chamada.
+        """
         if not self.overall.passes():
             return False
         if self.performance is None or not self.performance.passes():
             return False
+
+        if gate is Gate.BUILD:
+            return True
+
         gap = self.mixed_breed_gap
-        # Sem dados de SRD o spike está incompleto: não dá para aprovar.
-        if gap is None or gap > 10.0:
+        if gap is None or gap > MAX_MIXED_BREED_GAP:
             return False
         return True
+
+    @property
+    def blockers(self) -> list[str]:
+        """O que impede PRODUCTION. Lista vazia significa pronto."""
+        out: list[str] = []
+        if self.overall.accuracy < MIN_ACCURACY:
+            out.append(f"acurácia {self.overall.accuracy:.1%} < {MIN_ACCURACY:.0%}")
+        if self.overall.false_success_rate > MAX_FALSE_SUCCESS:
+            out.append(
+                f"falso positivo {self.overall.false_success_rate:.2%} "
+                f"> {MAX_FALSE_SUCCESS:.0%}"
+            )
+        if self.overall.abstention_rate > MAX_ABSTENTION:
+            out.append(
+                f"abstenção {self.overall.abstention_rate:.1%} > {MAX_ABSTENTION:.0%}"
+            )
+        if self.performance is None:
+            out.append("sem medição de desempenho em device")
+        elif not self.performance.passes():
+            out.append(
+                f"desempenho {self.performance.fps:.1f} FPS / "
+                f"p95 {self.performance.p95_latency_ms:.0f}ms fora do alvo"
+            )
+        gap = self.mixed_breed_gap
+        if gap is None:
+            out.append("sem dados de SRD — não validado para o mercado brasileiro")
+        elif gap > MAX_MIXED_BREED_GAP:
+            out.append(f"queda em SRD {gap:.1f}pp > {MAX_MIXED_BREED_GAP:.0f}pp")
+        return out
 
     def summary(self) -> str:
         lines = [
@@ -176,9 +236,9 @@ class SpikeReport:
         ]
         gap = self.mixed_breed_gap
         lines.append(
-            f"queda em SRD      {gap:.1f}pp (max 10pp)"
+            f"queda em SRD      {gap:.1f}pp (max {MAX_MIXED_BREED_GAP:.0f}pp)"
             if gap is not None
-            else "queda em SRD      SEM DADOS — spike incompleto"
+            else "queda em SRD      PENDENTE — sem dataset brasileiro"
         )
         if self.performance:
             lines.append(
@@ -187,8 +247,17 @@ class SpikeReport:
                 f"({self.performance.device})"
             )
         else:
-            lines.append("desempenho        SEM DADOS — spike incompleto")
-        lines.append(f"\nVEREDITO: {'PASSOU' if self.passes() else 'NÃO PASSOU'}")
+            lines.append("desempenho        SEM DADOS")
+
+        build_ok = self.passes(Gate.BUILD)
+        prod_ok = self.passes(Gate.PRODUCTION)
+        lines.append("")
+        lines.append(f"BUILD       {'PASSOU' if build_ok else 'NÃO PASSOU'}")
+        lines.append(f"PRODUÇÃO    {'PASSOU' if prod_ok else 'NÃO PASSOU'}")
+
+        if not prod_ok:
+            lines.append("\nPendências para produção:")
+            lines.extend(f"  - {b}" for b in self.blockers)
         return "\n".join(lines)
 
 
