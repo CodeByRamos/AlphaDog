@@ -11,10 +11,15 @@
     "check:links": "node scripts/check-links.mjs",
     "shot": "node scripts/shot.mjs",
     "baseline": "node scripts/baseline.mjs",
-    "brand": "pnpm --filter @alphadog/website brand"
+    "brand": "pnpm --filter @alphadog/website brand",
+    "db:migrate": "node scripts/db-migrate.mjs",
+    "db:verify": "node scripts/db-verify.mjs",
+    "test": "turbo run test"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.0",
+    "dotenv": "^17.4.2",
+    "pg": "^8.22.0",
     "playwright": "^1.49.0",
     "prettier": "^3.9.5",
     "prettier-plugin-tailwindcss": "^0.8.0",

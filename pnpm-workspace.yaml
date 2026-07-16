@@ -24,3 +24,5 @@ allowBuilds:
   unrs-resolver: true
   # Turborepo's file watcher.
   "@parcel/watcher": true
+  # Native bundler binary. Vitest uses it to transform TypeScript.
+  esbuild: true
