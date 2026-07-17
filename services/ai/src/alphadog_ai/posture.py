@@ -76,6 +76,13 @@ SIT_SHOULDER_HIP_DROP = 0.18
 
 
 def _mean_y(detection: Detection, group: tuple[KP, ...]) -> float | None:
+    """Altura média dos pontos visíveis do grupo.
+
+    Os grupos SHOULDERS e HIPS são proxies com reserva (o StanfordExtra não
+    anota quadril nem ombro diretamente), então qualquer ponto visível do grupo
+    serve. Devolve None quando nenhum está visível — e aí o classificador
+    responde UNKNOWN em vez de inventar.
+    """
     ys = [detection.get(kp).y for kp in group if detection.get(kp).visible]
     return statistics.fmean(ys) if ys else None
 

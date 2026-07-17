@@ -21,20 +21,27 @@
  * produto passa a piorar o treino em vez de melhorar.
  */
 
-/** Índice de cada keypoint. Ordem do StanfordExtra — não reordenar. */
+/**
+ * Índice de cada keypoint. Ordem do StanfordExtra — não reordenar.
+ *
+ * 24 pontos, verificado contra o StanfordExtra_v12.json real. Precisa bater
+ * exatamente com services/ai/src/alphadog_ai/keypoints.py: o Python julga o
+ * modelo no spike, o TypeScript roda no celular, e um índice fora de sincronia
+ * faria os dois discordarem sobre o mesmo cão.
+ */
 export const KP = {
   LEFT_FRONT_PAW: 0,
   LEFT_FRONT_KNEE: 1,
-  LEFT_FRONT_HIP: 2,
+  LEFT_FRONT_ELBOW: 2,
   LEFT_BACK_PAW: 3,
   LEFT_BACK_KNEE: 4,
-  LEFT_BACK_HIP: 5,
+  LEFT_BACK_HOCK: 5,
   RIGHT_FRONT_PAW: 6,
   RIGHT_FRONT_KNEE: 7,
-  RIGHT_FRONT_HIP: 8,
+  RIGHT_FRONT_ELBOW: 8,
   RIGHT_BACK_PAW: 9,
   RIGHT_BACK_KNEE: 10,
-  RIGHT_BACK_HIP: 11,
+  RIGHT_BACK_HOCK: 11,
   TAIL_BASE: 12,
   TAIL_TIP: 13,
   LEFT_EAR_BASE: 14,
@@ -43,9 +50,14 @@ export const KP = {
   CHIN: 17,
   LEFT_EAR_TIP: 18,
   RIGHT_EAR_TIP: 19,
+  LEFT_EYE: 20,
+  RIGHT_EYE: 21,
+  /** Cernelha — topo dos ombros. */
+  WITHERS: 22,
+  THROAT: 23,
 } as const;
 
-export const NUM_KEYPOINTS = 20;
+export const NUM_KEYPOINTS = 24;
 
 export type Keypoint = { x: number; y: number; confidence: number };
 
@@ -87,8 +99,18 @@ const SITTING_ASPECT_MAX = 0.95;
 const LYING_ASPECT_MIN = 1.7;
 const SIT_SHOULDER_HIP_DROP = 0.18;
 
-const SHOULDERS = [KP.LEFT_FRONT_HIP, KP.RIGHT_FRONT_HIP];
-const HIPS = [KP.LEFT_BACK_HIP, KP.RIGHT_BACK_HIP];
+/**
+ * Proxy do ombro. O StanfordExtra não anota o ombro diretamente: a cernelha é o
+ * ponto no topo dos ombros, e os cotovelos servem de reserva quando ela some.
+ */
+const SHOULDERS = [KP.WITHERS, KP.LEFT_FRONT_ELBOW, KP.RIGHT_FRONT_ELBOW];
+
+/**
+ * Proxy do quadril. O jarrete é a articulação traseira mais alta do esquema e
+ * sobe/desce junto com o quadril quando o cão senta.
+ */
+const HIPS = [KP.LEFT_BACK_HOCK, KP.RIGHT_BACK_HOCK];
+
 const FRONT_PAWS = [KP.LEFT_FRONT_PAW, KP.RIGHT_FRONT_PAW];
 const BACK_PAWS = [KP.LEFT_BACK_PAW, KP.RIGHT_BACK_PAW];
 const BACK_KNEES = [KP.LEFT_BACK_KNEE, KP.RIGHT_BACK_KNEE];

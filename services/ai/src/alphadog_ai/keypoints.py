@@ -1,12 +1,17 @@
 """Esquema de keypoints canino.
 
-Segue o layout do StanfordExtra (20 pontos), escolhido em vez do AP-10K porque
-tem 12.000 imagens só de cão e articulações caninas explícitas, enquanto o
-AP-10K divide ~10k imagens entre 54 espécies e usa 17 pontos genéricos de
-quadrúpede.
+Layout do StanfordExtra: **24 keypoints**, verificado contra o
+StanfordExtra_v12.json real (12.538 entradas, todas com 24). Escolhido em vez do
+AP-10K porque tem 12k imagens só de cão e articulações caninas explícitas,
+enquanto o AP-10K divide ~10k imagens entre 54 espécies com 17 pontos genéricos
+de quadrúpede.
 
 A ordem dos índices é a do dataset e NÃO deve ser reordenada: os pesos treinados
 dependem dela.
+
+Os 4 últimos (20-23) são extras do StanfordExtra sobre o esquema de 20 do
+Animal Pose original. Ficam quase sempre ausentes nas anotações, mas precisam
+existir no vetor para o índice bater.
 """
 
 from __future__ import annotations
@@ -18,26 +23,37 @@ from enum import IntEnum
 class KP(IntEnum):
     """Índice de cada keypoint no vetor de saída do modelo."""
 
+    # Pata esquerda dianteira: pata, joelho, cotovelo
     LEFT_FRONT_PAW = 0
     LEFT_FRONT_KNEE = 1
-    LEFT_FRONT_HIP = 2
+    LEFT_FRONT_ELBOW = 2
+    # Pata esquerda traseira
     LEFT_BACK_PAW = 3
     LEFT_BACK_KNEE = 4
-    LEFT_BACK_HIP = 5
+    LEFT_BACK_HOCK = 5
+    # Pata direita dianteira
     RIGHT_FRONT_PAW = 6
     RIGHT_FRONT_KNEE = 7
-    RIGHT_FRONT_HIP = 8
+    RIGHT_FRONT_ELBOW = 8
+    # Pata direita traseira
     RIGHT_BACK_PAW = 9
     RIGHT_BACK_KNEE = 10
-    RIGHT_BACK_HIP = 11
+    RIGHT_BACK_HOCK = 11
+    # Cauda
     TAIL_BASE = 12
     TAIL_TIP = 13
+    # Cabeça
     LEFT_EAR_BASE = 14
     RIGHT_EAR_BASE = 15
     NOSE = 16
     CHIN = 17
     LEFT_EAR_TIP = 18
     RIGHT_EAR_TIP = 19
+    # Extras do StanfordExtra
+    LEFT_EYE = 20
+    RIGHT_EYE = 21
+    WITHERS = 22  # cernelha — topo dos ombros
+    THROAT = 23
 
 
 NUM_KEYPOINTS = len(KP)
@@ -45,8 +61,15 @@ NUM_KEYPOINTS = len(KP)
 FRONT_PAWS = (KP.LEFT_FRONT_PAW, KP.RIGHT_FRONT_PAW)
 BACK_PAWS = (KP.LEFT_BACK_PAW, KP.RIGHT_BACK_PAW)
 BACK_KNEES = (KP.LEFT_BACK_KNEE, KP.RIGHT_BACK_KNEE)
-HIPS = (KP.LEFT_BACK_HIP, KP.RIGHT_BACK_HIP)
-SHOULDERS = (KP.LEFT_FRONT_HIP, KP.RIGHT_FRONT_HIP)
+
+#: Proxy do quadril. O StanfordExtra não anota o quadril diretamente; o jarrete
+#: (hock) é a articulação traseira mais alta que existe no esquema e sobe/desce
+#: junto com o quadril quando o cão senta.
+HIPS = (KP.LEFT_BACK_HOCK, KP.RIGHT_BACK_HOCK)
+
+#: Proxy do ombro. A cernelha é o ponto único no topo dos ombros; o cotovelo
+#: serve de reserva quando ela está ausente.
+SHOULDERS = (KP.WITHERS, KP.LEFT_FRONT_ELBOW, KP.RIGHT_FRONT_ELBOW)
 
 
 @dataclass(frozen=True)

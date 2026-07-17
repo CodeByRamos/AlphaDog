@@ -164,15 +164,18 @@ def dataset_yaml(root: Path) -> str:
     esquerda vira direita. Sem este mapa o augment de flip treinaria o modelo
     com lados trocados — um bug que não aparece na loss, só na inferência.
     """
-    # Índices de keypoints.py: 0-5 esquerda, 6-11 direita, 12-13 cauda,
-    # 14/18 orelha esq., 15/19 orelha dir., 16-17 focinho.
+    # Ver KP em keypoints.py. Ao espelhar, tudo que tem lado troca de par; o que
+    # está no eixo do corpo (nariz, queixo, cauda, cernelha, garganta) aponta
+    # para si mesmo.
     flip_idx = [
-        6, 7, 8, 9, 10, 11,   # esquerda -> direita
-        0, 1, 2, 3, 4, 5,     # direita -> esquerda
-        12, 13,               # cauda: sem lado
+        6, 7, 8, 9, 10, 11,   # pernas esquerdas -> direitas
+        0, 1, 2, 3, 4, 5,     # pernas direitas -> esquerdas
+        12, 13,               # cauda: no eixo
         15, 14,               # bases de orelha trocam
-        16, 17,               # nariz e queixo: sem lado
+        16, 17,               # nariz e queixo: no eixo
         19, 18,               # pontas de orelha trocam
+        21, 20,               # olhos trocam
+        22, 23,               # cernelha e garganta: no eixo
     ]
     return f"""# Gerado por alphadog_ai.dataset — não editar à mão.
 path: {root.as_posix()}
