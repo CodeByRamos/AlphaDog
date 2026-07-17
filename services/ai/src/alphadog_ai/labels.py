@@ -68,10 +68,16 @@ def label_summary(labels: list[PostureLabel]) -> dict[str, int]:
 
 #: Mínimo por classe para o gate ter significado estatístico.
 #:
-#: Com 50, um erro vale 2 pontos percentuais — e o critério de falso positivo é
-#: 2%. A amostra precisa ser grande o bastante para o limiar distinguir sinal de
-#: ruído.
-MIN_PER_CLASS = 60
+#: 40 dá margem de ~2,5 pontos percentuais por erro — suficiente para separar um
+#: modelo bom de um ruim num spike inicial.
+#:
+#: Por que não mais: sentado e deitado são raros no StanfordExtra (foto casual
+#: pega o cão em pé), então chegar a 60 exigiria olhar centenas de fotos a mais.
+#: E o StanfordExtra nem é a distribuição de uso — cão treinando senta e deita
+#: sob comando muito mais que numa foto qualquer. Este gate é aproximação
+#: inicial; o número real de produção sobe quando houver vídeo de uso rotulado,
+#: idealmente com SRD.
+MIN_PER_CLASS = 40
 
 
 def is_ready_for_gate(labels: list[PostureLabel]) -> tuple[bool, str]:

@@ -53,6 +53,11 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 
-# dataset: pesado e sob licença própria — nunca versionar
-services/ai/data/
+# dataset: pesado e sob licença própria — nunca versionar.
+# Usa data/* e não data/ porque git não re-inclui arquivo se o diretório-pai
+# inteiro está excluído — o `!` abaixo só funciona ignorando o conteúdo, não a pasta.
+services/ai/data/*
 services/ai/runs/
+
+# rotulos de postura: pequenos e trabalho manual, versionar apesar de data/ ser ignorado
+!services/ai/data/posture_labels.json
