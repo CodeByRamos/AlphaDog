@@ -144,6 +144,9 @@ importers:
       eslint-config-expo:
         specifier: ~10.0.0
         version: 10.0.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
+      sharp:
+        specifier: ^0.35.3
+        version: 0.35.3(@types/node@20.19.43)
       typescript:
         specifier: ^5
         version: 5.9.3

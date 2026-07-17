@@ -38,6 +38,14 @@ export type SessionResult = {
   durationSeconds: number;
   /** 0..1. Quantas repetições saíram do total tentado. */
   successRate: number;
+  /**
+   * Quantos acertos foram marcados pelo tutor em vez de detectados.
+   *
+   * Rastreado porque muda o significado do número: uma sessão 100% manual é o
+   * relato do tutor, não medição. Quando o modelo existir, isto separa o que a
+   * visão viu do que o tutor disse ter visto.
+   */
+  manualCount: number;
 };
 
 /** Pausa após acerto, para o tutor recompensar antes da próxima repetição. */
@@ -50,6 +58,7 @@ export class TrainingSession {
 
   private _currentRep = 1;
   private _successCount = 0;
+  private _manualCount = 0;
   private _phase: SessionPhase = "searching";
   private _lastEvent: FeedbackEvent = {
     feedback: "waiting_for_dog",
@@ -109,6 +118,36 @@ export class TrainingSession {
     };
   }
 
+  /**
+   * Registra um acerto informado pelo tutor.
+   *
+   * Existe porque nem tudo é visível: a pata sai do quadro, o cão fica de
+   * costas, e — hoje — não há modelo de visão. Sem isto o tutor treinaria sem
+   * conseguir marcar nada, e a sessão iria ao banco como zero acertos, o que é
+   * pior que não medir: seria um dado errado.
+   *
+   * Trata igual ao acerto detectado: entra na recompensa e avança a repetição.
+   * A diferença fica no `manual` do resultado, para o histórico saber a origem.
+   */
+  markManualSuccess(timestamp: number): SessionState {
+    if (this._phase === "finished" || this._phase === "rewarding") {
+      return this.state(timestamp);
+    }
+
+    if (this.startedAt === null) this.startedAt = timestamp;
+
+    this._successCount += 1;
+    this._manualCount += 1;
+    this._phase = "rewarding";
+    this.rewardUntil = timestamp + REWARD_SECONDS;
+    this._lastEvent = {
+      feedback: "success",
+      remainingSeconds: 0,
+      reason: "marcado pelo tutor",
+    };
+    return this.state(timestamp);
+  }
+
   /** Resultado para gravar. Pode ser chamado a qualquer momento — o tutor pode
    *  encerrar antes do fim, e a sessão parcial ainda vale progresso. */
   result(timestamp: number): SessionResult {
@@ -124,6 +163,7 @@ export class TrainingSession {
       totalReps: this.exercise.reps,
       durationSeconds: Math.round(duration),
       successRate: denominator > 0 ? this._successCount / denominator : 0,
+      manualCount: this._manualCount,
     };
   }
 

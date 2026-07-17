@@ -28,11 +28,11 @@ export default function TrainingScreen() {
 
   const exercise = EXERCISES[exerciseParam as ExerciseId] ?? EXERCISES.sit;
   const [phase, setPhase] = useState<Phase>("brief");
-  const training = useTrainingSession(exercise);
+  const training = useTrainingSession(exercise, detector.kind === "ready");
 
   const save = useMutation({
     mutationFn: (completed: boolean) =>
-      saveSession(dog!.id, session!.user.id, training.result(training.state.elapsedSeconds), completed),
+      saveSession(dog!.id, session!.user.id, training.result(), completed),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["sessions"] });
     },
@@ -108,7 +108,7 @@ export default function TrainingScreen() {
   }
 
   if (phase === "done") {
-    const result = training.result(training.state.elapsedSeconds);
+    const result = training.result();
     const rate = Math.round(result.successRate * 100);
 
     return (
@@ -165,8 +165,8 @@ export default function TrainingScreen() {
       dogName={dog.name}
       detector={detector}
       state={training.state}
-      onFrame={training.pushFrame}
       onFinish={finish}
+      onMarkSuccess={training.markSuccess}
       feedbackText={feedbackText(training.state, dog.name)}
       tone={feedbackTone(training.state.feedback)}
     />

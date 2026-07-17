@@ -18,6 +18,8 @@ import { Button } from "../../components/Button";
 import { color, duration, easing, radius, space, type } from "../../theme";
 import type { DetectorStatus } from "../../vision/detector";
 
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
 type Tone = "neutral" | "progress" | "success" | "warn";
 
 const TONE_COLOR: Record<Tone, string> = {
@@ -32,8 +34,9 @@ type Props = {
   dogName: string;
   detector: DetectorStatus;
   state: SessionState;
-  onFrame: (detection: Detection | null, timestamp: number) => SessionState;
   onFinish: (completed: boolean) => void;
+  /** O tutor confirmou o acerto. */
+  onMarkSuccess: () => void;
   feedbackText: string;
   tone: Tone;
 };
@@ -43,8 +46,8 @@ export function CameraStage({
   dogName,
   detector,
   state,
-  onFrame,
   onFinish,
+  onMarkSuccess,
   feedbackText,
   tone,
 }: Props) {
@@ -127,51 +130,111 @@ export function CameraStage({
         </View>
       </View>
 
-      {detector.kind === "unavailable" ? (
-        <ModelUnavailable reason={detector.reason} exercise={exercise} />
-      ) : (
+      {detector.kind === "ready" ? (
         <FeedbackBanner text={feedbackText} tone={tone} state={state} />
+      ) : (
+        <ModelUnavailable exercise={exercise} />
       )}
 
       <View style={[styles.scrim, styles.scrimBottom, { paddingBottom: insets.bottom + space.lg }]}>
-        <Button
-          label="Encerrar sessão"
-          variant="ghost"
-          onPress={() => onFinish(false)}
+        <MarkSuccessButton
+          disabled={state.phase === "rewarding" || state.phase === "finished"}
+          rewarding={state.phase === "rewarding"}
+          onPress={onMarkSuccess}
         />
+        <Pressable
+          onPress={() => onFinish(false)}
+          accessibilityRole="button"
+          style={styles.endBtn}
+          hitSlop={8}
+        >
+          <Text style={[type.label, { color: color.ink300 }]}>Encerrar sessão</Text>
+        </Pressable>
       </View>
     </View>
   );
 }
 
 /**
- * Estado sem modelo.
+ * Marcar acerto à mão.
+ *
+ * O botão principal da tela enquanto não há modelo — e continua útil depois: a
+ * pata sai do quadro, o cão fica de costas, a luz muda. Sem ele o tutor treina
+ * e a sessão vai ao banco como zero acertos, o que é pior que não medir.
+ *
+ * Grande e embaixo: é para ser alcançado com o polegar, com o cão puxando a
+ * guia na outra mão.
+ */
+function MarkSuccessButton({
+  disabled,
+  rewarding,
+  onPress,
+}: {
+  disabled: boolean;
+  rewarding: boolean;
+  onPress: () => void;
+}) {
+  const scale = useSharedValue(1);
+  const animated = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+
+  return (
+    <AnimatedPressable
+      onPressIn={() => {
+        if (disabled) return;
+        scale.value = withSpring(0.95, easing.spring);
+      }}
+      onPressOut={() => {
+        scale.value = withSpring(1, easing.springBouncy);
+      }}
+      onPress={() => {
+        if (disabled) return;
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        onPress();
+      }}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel="Ele acertou"
+      accessibilityState={{ disabled }}
+      style={[styles.markBtn, rewarding && styles.markBtnDone, animated]}
+    >
+      <Ionicons
+        name={rewarding ? "checkmark-circle" : "paw"}
+        size={22}
+        color={color.ink900}
+      />
+      <Text style={[type.subheading, { color: color.ink900 }]}>
+        {rewarding ? "Recompense agora!" : "Ele acertou"}
+      </Text>
+    </AnimatedPressable>
+  );
+}
+
+/**
+ * Estado sem modelo de visão.
  *
  * Deliberadamente NÃO simula detecção. Seria fácil sortear posturas e a demo
  * pareceria pronta — e um "Excelente!" sem o cão ter sentado ensina o tutor a
  * recompensar o comportamento errado. O app passaria a piorar o treino.
  *
- * Em vez disso a câmera roda (o tutor se filma treinando, o que já ajuda) e os
- * passos ficam à mão. O que não fingimos é enxergar.
+ * A sessão funciona mesmo assim: câmera ligada, passos à mão, e o tutor marca o
+ * acerto. É honesto e é útil — quem julga é quem está vendo o cão.
  */
-function ModelUnavailable({ reason, exercise }: { reason: string; exercise: Exercise }) {
+function ModelUnavailable({ exercise }: { exercise: Exercise }) {
+  // O passo do meio é onde o tutor trava: os primeiros são preparação, o
+  // último é consolidação.
+  const step = exercise.steps[1] ?? exercise.steps[0];
+
   return (
     <Animated.View entering={FadeIn.duration(duration.normal)} style={styles.center}>
       <View style={styles.notice}>
-        <Ionicons name="eye-off-outline" size={22} color={color.alpha500} />
-        <Text style={[type.subheading, { color: color.white, textAlign: "center" }]}>
-          Feedback automático em breve
+        <Text style={[type.overline, { color: color.alpha500 }]}>
+          {step?.title ?? exercise.name}
         </Text>
-        <Text style={[type.bodySmall, styles.noticeBody]}>
-          {reason} Enquanto isso, siga os passos e treine normalmente — a câmera
-          está gravando para você se ver.
-        </Text>
+        <Text style={[type.subheading, styles.noticeBody]}>{step?.body ?? ""}</Text>
         <View style={styles.divider} />
-        <Text style={[type.label, { color: color.alpha500 }]}>
-          {exercise.steps[1]?.title ?? exercise.steps[0]?.title}
-        </Text>
-        <Text style={[type.bodySmall, styles.noticeBody]}>
-          {exercise.steps[1]?.body ?? exercise.steps[0]?.body}
+        <Text style={[type.caption, { color: color.ink400, textAlign: "center" }]}>
+          Toque em “Ele acertou” quando {exercise.name.toLowerCase()} sair.
+          O reconhecimento automático chega em breve.
         </Text>
       </View>
     </Animated.View>
@@ -269,7 +332,23 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.ink950 },
   scrim: { position: "absolute", left: 0, right: 0, paddingHorizontal: space.lg },
   scrimTop: { top: 0, paddingBottom: space.lg, backgroundColor: "rgba(5,7,11,0.55)" },
-  scrimBottom: { bottom: 0, paddingTop: space.lg, backgroundColor: "rgba(5,7,11,0.55)" },
+  scrimBottom: {
+    bottom: 0,
+    paddingTop: space.lg,
+    backgroundColor: "rgba(5,7,11,0.55)",
+    gap: space.sm,
+  },
+  markBtn: {
+    height: 60,
+    borderRadius: radius.lg,
+    backgroundColor: color.alpha500,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: space.sm,
+  },
+  markBtnDone: { backgroundColor: color.sage400 },
+  endBtn: { alignItems: "center", paddingVertical: space.md },
   topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   closeBtn: {
     width: 38,

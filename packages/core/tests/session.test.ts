@@ -180,6 +180,68 @@ describe("resultado", () => {
   });
 });
 
+describe("acerto marcado pelo tutor", () => {
+  it("conta como sucesso", () => {
+    const session = sitSession();
+    const state = session.markManualSuccess(1);
+    expect(state.successCount).toBe(1);
+    expect(state.feedback).toBe("success");
+  });
+
+  it("entra na recompensa, como o detectado", () => {
+    const session = sitSession();
+    expect(session.markManualSuccess(1).phase).toBe("rewarding");
+  });
+
+  it("avança a repetição depois da recompensa", () => {
+    const session = sitSession();
+    session.markManualSuccess(1);
+    const state = feed(session, "standing", 5, 5);
+    expect(state.currentRep).toBe(2);
+  });
+
+  it("aparece separado no resultado", () => {
+    // Uma sessão 100% manual é o relato do tutor, não medição. O histórico
+    // precisa distinguir. Cada marcação depois da janela de recompensa da
+    // anterior — marcar duas vezes no mesmo instante é toque duplo e conta uma.
+    const session = sitSession();
+    session.markManualSuccess(1);
+    feed(session, "unknown", 5, 5);
+    session.markManualSuccess(6);
+    const result = session.result(10);
+    expect(result.successCount).toBe(2);
+    expect(result.manualCount).toBe(2);
+  });
+
+  it("acerto detectado não conta como manual", () => {
+    const session = sitSession();
+    feed(session, "sitting", 70);
+    expect(session.result(3).manualCount).toBe(0);
+  });
+
+  it("não marca duas vezes na mesma repetição", () => {
+    // O tutor toca duas vezes sem querer; a segunda cai na recompensa.
+    const session = sitSession();
+    session.markManualSuccess(1);
+    session.markManualSuccess(1.2);
+    expect(session.result(2).successCount).toBe(1);
+  });
+
+  it("conclui a sessão inteira só com marcação manual", () => {
+    // É o fluxo real enquanto não há modelo.
+    const session = sitSession();
+    let t = 0;
+    for (let rep = 0; rep < EXERCISES.sit.reps; rep++) {
+      session.markManualSuccess(t);
+      t += 3.1;
+      feed(session, "unknown", 5, t);
+      t += 0.5;
+    }
+    expect(session.finished).toBe(true);
+    expect(session.result(t).successRate).toBe(1);
+  });
+});
+
 describe("copy do feedback", () => {
   it("usa o nome do cão", () => {
     const session = sitSession();
