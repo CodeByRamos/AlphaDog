@@ -1,65 +1,134 @@
-# Pendências do app mobile
+# O que falta — passo a passo
 
-O app está **completo e commitado**. Falta rodar num celular.
+O código está completo. O que resta depende de você: um celular, 30 minutos de
+rotulagem e um treino no Colab.
 
-Já verificado por mim contra o banco real (não precisa fazer nada):
+## Já feito e verificado (não mexa)
 
-| | Status |
+| | |
 | --- | --- |
-| Sua `anon key` | ✅ correta (`role: anon`, não service_role) |
-| Tabelas + RLS | ✅ 2 tabelas, 7 políticas, bucket privado |
-| RLS de verdade | ✅ anônimo não lê nem escreve (erro 42501) |
-| Insert de sessão em cão alheio | ✅ bloqueado |
+| Banco + RLS | ✅ testado com a anon key real: anônimo não lê nem escreve |
+| Sua `anon key` | ✅ é `anon`, não `service_role` |
+| App mobile | ✅ completo, typecheck limpo |
 | Website | ✅ buildando |
-| Testes | ✅ 97 passando |
+| Dataset Stanford | ✅ **12.538 imagens convertidas, 120 raças, zero puladas** |
+| Testes | ✅ 168 (71 Python + 51 core + 46 mobile) |
 
 ---
 
-# 🔴 1. "Confirm email" ainda está ligado
+# 🔴 1. "Confirm email" — ainda ligado
 
-**Isto é o único item que ainda bloqueia.** Rodei o teste contra seu banco e ele
-falhou exatamente aqui:
+Rodei o teste contra seu banco agora:
 
 ```
 ok    cadastro funciona
 FALHA sessão criada no cadastro  (confirm email ligado?)
 ```
 
-O Supabase cria o usuário mas **não devolve sessão** enquanto o e-mail não for
-confirmado. Você disse que desligou — o banco discorda. Provavelmente não salvou.
+Você disse que desligou; o banco discorda. Quase sempre é o botão **Save** que
+falta.
 
-### Passo a passo
+1. [supabase.com/dashboard](https://supabase.com/dashboard) → AlphaDog
+2. **Authentication** → **Sign In / Providers**
+3. Clique em **Email** para expandir
+4. Desligue **Confirm email**
+5. **Save** no rodapé ← este é o passo que costuma escapar
 
-1. [supabase.com/dashboard](https://supabase.com/dashboard) → projeto AlphaDog.
-2. Menu lateral → **Authentication**.
-3. **Sign In / Providers** (ou **Providers**).
-4. Clique em **Email** para expandir.
-5. Desligue **Confirm email**.
-6. **Save** no rodapé do painel. ⚠️ É esse botão que costuma passar batido.
-
-### Como validar
-
+**Validar:**
 ```powershell
 cd C:\Users\Ramos\Documents\AlphaDog
 node scripts/db-smoke.mjs
 ```
+Tem que terminar em **`RLS OK`**.
 
-Tem que terminar com **`RLS OK`**. Se ainda falhar em "sessão criada", não salvou.
-
-> **Antes de lançar, religue.** Sem confirmação, qualquer um cria conta com o
-> e-mail de outra pessoa. O app já trata os dois casos — com confirmação ligada
-> ele mostra "Confirme seu e-mail" em vez de travar.
-
-**Arquivo que depende disto:** `apps/mobile/src/state/auth.tsx`
+> Religue antes de lançar. Sem confirmação, qualquer um cria conta com o e-mail
+> de outra pessoa. O app já trata os dois casos.
 
 ---
 
-# 🔴 2. Development build (Expo Go não funciona)
+# 🔴 2. Rotular 180 fotos (~30 min)
 
-**Por quê:** o modo treino usa Vision Camera, que roda código nativo. O Expo Go
-não suporta — limitação dele, não nossa.
+**Por que precisa:** o StanfordExtra tem os keypoints (onde está cada pata) mas
+**não diz se o cão está sentado**. Sem esse rótulo, o gate não tem como medir se
+o modelo acerta a decisão do produto — e sem veredito o modelo não entra no app.
 
-**Tempo:** ~20 min, quase tudo espera.
+```powershell
+cd C:\Users\Ramos\Documents\AlphaDog\services\ai
+.\.venv\Scripts\python.exe scripts\label_postures.py
+```
+
+Abre no navegador sozinho. Para cada foto:
+
+| Tecla | Rótulo | Quando |
+| --- | --- | --- |
+| **1** | Sentado | bumbum no chão, tronco erguido |
+| **2** | Em pé | as quatro patas no chão, tronco horizontal |
+| **3** | Deitado | barriga ou lateral no chão |
+| **4** | Outro | correndo, pulando, de costas, não dá pra dizer |
+| **espaço** | Pular | foto ruim demais |
+
+**Meta: 60 de cada** (sentado, em pé, deitado). O contador no topo mostra o
+progresso. Salva a cada clique — pode fechar e voltar.
+
+### Use o "Outro" sem medo
+
+Cão correndo não é nenhuma das três. Forçar um rótulo cria dado errado no
+conjunto que vai julgar o modelo — pior que ter menos amostras.
+
+### Por que só 60 por classe
+
+O gate **mede** decisão, não treina. O modelo já aprendeu pose com as 12 mil.
+Com menos de 60, um único erro vale mais de 2 pontos percentuais — e o critério
+de falso positivo é exatamente 2%. Abaixo disso, o gate não distingue sinal de
+ruído.
+
+---
+
+# 🔴 3. Treinar no Colab (2–4h, quase tudo espera)
+
+## 3.1 Compactar o dataset
+
+```powershell
+cd C:\Users\Ramos\Documents\AlphaDog\services\ai\data
+Compress-Archive -Path yolo -DestinationPath yolo.zip
+```
+
+Dá ~800 MB.
+
+## 3.2 Subir para o Drive
+
+Coloque o `yolo.zip` na raiz do seu Google Drive. **Não** faça upload direto no
+Colab — arquivo desse tamanho cai no meio.
+
+## 3.3 Rodar
+
+1. Abra [colab.research.google.com](https://colab.research.google.com)
+2. **Arquivo → Fazer upload de notebook**
+3. Escolha `services/ai/notebooks/train_colab.ipynb`
+4. **Ambiente de execução → Alterar o tipo → T4 GPU → Salvar**
+5. Rode as células em ordem
+
+A primeira célula **para** se não houver GPU — de propósito. Em CPU levaria dias.
+
+## 3.4 Guardar o resultado
+
+A última célula salva no Drive. **Não pule** — o Colab apaga tudo ao
+desconectar, e você não vai querer treinar de novo.
+
+Baixe o `.tflite` e coloque em:
+
+```
+apps/mobile/assets/models/dogpose.tflite
+```
+
+Me avise que eu ligo no app — é uma linha em `useDetector.ts`.
+
+---
+
+# 🔴 4. Development build (Expo Go não roda)
+
+O modo treino usa Vision Camera com frame processor, que exige código nativo. O
+Expo Go não suporta — limitação dele.
 
 ```powershell
 npm install -g eas-cli
@@ -69,93 +138,61 @@ eas build:configure
 eas build --profile development --platform android
 ```
 
-Ao final o EAS dá um link. Abra no celular e instale o APK.
+Conta grátis em [expo.dev](https://expo.dev). Fila de 10–30 min. Ao final, um
+link: abra no celular e instale o APK.
 
-Depois, para rodar:
-
+Para rodar:
 ```powershell
 cd C:\Users\Ramos\Documents\AlphaDog\apps\mobile
 pnpm start
 ```
-
 Abra **o app instalado** (não o Expo Go) e escaneie o QR.
 
-### Conta EAS
+---
 
-Grátis em [expo.dev](https://expo.dev). O tier gratuito tem fila — 10 a 30 min.
+# 🟡 5. Celular Android intermediário
+
+Emulador não tem câmera real e usa a CPU do PC — o FPS medido seria mentira.
+
+Use Moto G, Samsung A, Redmi. **Não use seu melhor aparelho**: se só funcionar
+no top de linha, não funciona para a maioria dos seus clientes.
+
+Ative **Opções do desenvolvedor** → **Depuração USB**.
 
 ---
 
-# 🟡 3. Celular Android físico
+# Sua lista
 
-Emulador não tem câmera real e usa a CPU do PC. Ative **Opções do
-desenvolvedor** → **Depuração USB**.
-
-Use um aparelho **intermediário** (Moto G, Samsung A, Redmi). Se só funcionar no
-top de linha, não funciona para seus clientes.
-
----
-
-# 🟡 4. Imagens do Stanford Dogs
-
-Quando o download terminar:
-
-1. Extraia em `services/ai/data/stanford_dogs/Images/`
-2. Confira que virou uma pasta por raça (`n02085620-Chihuahua`, etc).
-3. Rode:
-
-```powershell
-cd C:\Users\Ramos\Documents\AlphaDog\services\ai
-.\.venv\Scripts\python.exe scripts\prepare_dataset.py --json data\StanfordExtra_v12.json --images data\stanford_dogs\Images --out data\yolo
-```
-
-Seguro: não baixa nada, valida os caminhos, falha alto se estiver errado.
-
-Espere ver `escritos: N treino, M validação`. Me avise.
+- [ ] 🔴 Desligar Confirm email **e clicar Save**
+- [ ] 🔴 Validar: `node scripts/db-smoke.mjs` → `RLS OK`
+- [ ] 🔴 Rotular 180 fotos (~30 min)
+- [ ] 🔴 Compactar `data/yolo`, subir no Drive, rodar o notebook
+- [ ] 🔴 Baixar o `.tflite` e me avisar
+- [ ] 🔴 Gerar o development build (EAS)
+- [ ] 🟡 Android intermediário com depuração USB
 
 ---
 
-# Resumo
+## Uma coisa que o rotulador já revelou
 
-- [ ] 🔴 Desligar **Confirm email** e clicar **Save**
-- [ ] 🔴 Validar com `node scripts/db-smoke.mjs` (tem que dar `RLS OK`)
-- [ ] 🔴 Gerar o development build com EAS
-- [ ] 🟡 Ativar depuração USB num Android intermediário
-- [ ] 🟡 Extrair as imagens e rodar `prepare_dataset.py`
+Na primeira foto que carreguei — um retriever claramente **em pé** — a razão de
+aspecto da caixa deu **0,97**. Os limiares atuais leriam isso como *sentado*.
 
----
+Não é bug: é exatamente por isso que o classificador exige que a caixa **e** a
+geometria dos keypoints concordem, e responde "não sei" quando discordam. A
+caixa sozinha erraria.
 
-## O que o app faz hoje
+Os limiares reais saem da sua rotulagem. É o dado que falta.
 
-Tudo, menos ver o cão:
+## Sobre a IA — o que o app faz hoje
 
-| Fluxo | Estado |
-| --- | --- |
-| Criar conta / entrar | Real, Supabase, sessão persistente |
-| Onboarding (9 campos) | Real, salva no banco |
-| Dashboard | Real: progresso, sequência, semana, recomendação |
-| Catálogo de treinos | Real, com passos de adestramento |
-| Abrir câmera | Real |
-| **Feedback da IA** | **Sem modelo — ver abaixo** |
-| Encerrar sessão | Real, grava no banco |
-| Histórico | Real, calculado das sessões |
-| Perfil + foto | Real, upload para o Storage |
+O modelo **não existe ainda**. A tela de treino abre a câmera, mostra os passos e
+avisa que o feedback automático vem em breve. **Não simula detecção.**
 
-## Sobre o feedback da IA
-
-**O modelo não existe ainda** — depende do dataset (item 4) e do treino no Colab.
-
-A tela de treino **não simula detecção**. Ela abre a câmera, mostra os passos e
-avisa que o feedback automático vem em breve.
-
-Escrever um detector falso seria trivial e faria a demo parecer pronta. Não fiz
+Escrever um detector falso levaria 10 minutos e a demo pareceria pronta. Não fiz
 de propósito: um "Excelente!" sem o cão ter sentado ensina o tutor a recompensar
-o comportamento errado — o app passaria a **piorar** o treino do cão em vez de
-melhorar. É o único lugar do produto onde parecer pronto é pior que admitir que
-falta.
-
-Quando o `.tflite` sair do treino, é **uma linha** em
-`apps/mobile/src/vision/useDetector.ts`. Nenhuma tela muda.
+o comportamento errado — o app passaria a **piorar** o treino. É o único lugar
+do produto onde parecer pronto é pior que admitir que falta.
 
 ## Travou?
 
