@@ -82,16 +82,20 @@ cd C:\Users\Ramos\Documents\AlphaDog\services\ai
 
 O ambiente você já configurou. Agora é rodar.
 
-## 3.1 Compactar o dataset
-```powershell
-cd C:\Users\Ramos\Documents\AlphaDog\services\ai\data
-Compress-Archive -Path yolo -DestinationPath yolo.zip
+## 3.1 O zip já está pronto — não precisa compactar
+Eu já gerei pra você:
 ```
-Dá ~800 MB.
+services/ai/data/yolo.zip   (~493 MB, 12.538 imagens, 0 caminhos quebrados)
+```
+> Por que eu mesmo fiz: o `Compress-Archive` e o ZipFile do PowerShell gravam os
+> caminhos com barra invertida (`\`), que o Linux do Colab não entende — o
+> dataset descompactaria quebrado. Usei o `zipfile` do Python (barra normal).
+> Se um dia precisar refazer, rode `services/ai/scripts/zip_dataset.py`, nunca o
+> `Compress-Archive`.
 
 ## 3.2 Subir para o Drive
-Coloque `yolo.zip` na raiz do seu Google Drive. **Não** faça upload direto no
-Colab — arquivo desse tamanho cai no meio.
+Coloque `services/ai/data/yolo.zip` na **raiz** do seu Google Drive. **Não** faça
+upload direto no Colab — arquivo desse tamanho cai no meio.
 
 ## 3.3 Rodar o notebook
 1. [colab.research.google.com](https://colab.research.google.com)
