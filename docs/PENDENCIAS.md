@@ -1,331 +1,237 @@
-# Pendências — o que só você pode resolver
+# O que você ainda precisa fazer
 
-Tudo aqui depende de acesso, hardware, dinheiro ou decisão de negócio. Eu não
-consigo fazer nenhum destes itens.
+Estado conferido contra o banco e o repositório em 17/07 — não é de memória.
 
-Ordenado por urgência. Faça de cima para baixo.
+O código está pronto. O que falta depende de você: um clique no painel, ~30 min
+de rotulagem, um treino no Colab e um build no celular.
 
-**Legenda**
+## Já feito e verificado (não mexa)
 
-| | Significado |
+| Item | Estado |
 | --- | --- |
-| 🔴 | Faça agora. Tem risco de segurança ou legal. |
-| 🟡 | Trava o desenvolvimento. Faça quando puder. |
-| 🟢 | Melhora o produto. Sem pressa. |
+| Banco + RLS | ✅ testado com a anon key real: anônimo não lê nem escreve (erro 42501) |
+| Sua `anon key` | ✅ é `anon`, não `service_role` |
+| App mobile completo | ✅ typecheck limpo, 58 testes no core |
+| Website | ✅ buildando |
+| Ícone e splash | ✅ gerados |
+| Dataset Stanford | ✅ 12.538 imagens convertidas, 120 raças, zero puladas |
+| Rótulos de postura | 🟡 **12 de 180** — você começou, falta terminar |
+
+**Legenda:** 🔴 bloqueia · 🟡 trava só uma parte · 🟢 melhora
 
 ---
 
-# 🔴 1. Trocar a senha do Supabase
+# 🔴 1. Desligar "Confirm email"
 
-**Por quê:** você colou a senha (`Bicicletavermelha1020`) no chat. Ela deve ser
-considerada vazada. Verifiquei e ela **não** foi para nenhum commit — mas trocar
-é obrigatório mesmo assim.
+**Rodei o teste agora e ele ainda falha aqui:**
 
-**Tempo:** 3 minutos.
+```
+ok    cadastro funciona
+FALHA sessão criada no cadastro  (confirm email ligado?)
+```
+
+O Supabase cria o usuário mas **não devolve sessão** enquanto o e-mail não for
+confirmado. Sem isso o app abre na tela "Confirme seu e-mail" em vez de entrar.
+Você já tentou; quase sempre é o botão **Save** que falta.
+
+### Onde
+[supabase.com/dashboard](https://supabase.com/dashboard) → projeto AlphaDog
 
 ### Passo a passo
+1. Menu lateral → **Authentication**
+2. Aba **Sign In / Providers**
+3. Clique em **Email** para expandir
+4. Desligue **Confirm email**
+5. **Save** no rodapé ← este é o passo que escapa
 
-1. Abra [supabase.com/dashboard](https://supabase.com/dashboard) e entre no
-   projeto do AlphaDog.
-2. Menu lateral → engrenagem **Settings**.
-3. Clique em **Database**.
-4. Procure a seção **Database password** → botão **Reset database password**.
-5. Clique em **Generate a password**. O Supabase cria uma senha forte.
-6. **Copie e guarde num gerenciador de senhas** (Bitwarden, 1Password, o do
-   navegador). Ela aparece **uma vez só**.
-7. Confirme o reset.
+### Validar
+```powershell
+cd C:\Users\Ramos\Documents\AlphaDog
+node scripts\db-smoke.mjs
+```
+Tem que terminar em **`RLS OK`**. Se ainda falhar em "sessão criada", não salvou.
 
-> ⚠️ Nunca cole senha no chat, em issue do GitHub, ou no `.env.example`.
-> Senha vive só no `.env.local` da sua máquina e no painel da Vercel.
+### Depende disto
+`apps/mobile/src/state/auth.tsx`
+
+> ⚠️ Religue antes de lançar. Sem confirmação, qualquer um cria conta com o
+> e-mail de outra pessoa. O app já trata os dois casos.
 
 ---
 
-# 🔴 2. Ligar o banco de dados
+# 🔴 2. Terminar a rotulagem de postura
 
-**Por quê:** sem isso o site guarda as respostas do quiz **em memória** — elas
-somem quando o servidor reinicia. Nada de real é salvo.
+**Por que:** o StanfordExtra tem os keypoints (onde está a pata) mas não diz se
+o cão está **sentado**. Sem esse rótulo, o gate não mede se o modelo acerta a
+decisão do produto — e sem veredito o modelo não entra no app.
 
-**Tempo:** 5 minutos. Faça logo depois do item 1.
+Você já rotulou 12. Falta chegar a 60 de cada postura.
+
+### Onde
+```powershell
+cd C:\Users\Ramos\Documents\AlphaDog\services\ai
+.\.venv\Scripts\python.exe scripts\label_postures.py
+```
+Abre no navegador sozinho. Retoma de onde parou.
+
+### Como rotular
+| Tecla | Rótulo | Quando |
+| --- | --- | --- |
+| **1** | Sentado | bumbum no chão, tronco erguido |
+| **2** | Em pé | quatro patas no chão, tronco horizontal |
+| **3** | Deitado | barriga ou lateral no chão |
+| **4** | Outro | correndo, pulando, de costas, não dá pra dizer |
+| **espaço** | Pular | foto ruim demais |
+
+**Meta: 60 de cada** (sentado, em pé, deitado). O contador no topo mostra o
+progresso. Salva a cada clique — pode fechar e voltar.
+
+### Exatamente quanto falta agora
+- sentado: **1 de 60**
+- em pé: **1 de 60**
+- deitado: **8 de 60**
+
+São ~170 fotos, uns 25 minutos. Use "Outro" sem medo — cão correndo não é
+nenhuma das três, e forçar um rótulo cria dado errado.
+
+### Depende disto
+O gate (`services/ai/src/alphadog_ai/evaluation.py`) e o veredito do modelo.
+
+---
+
+# 🔴 3. Treinar no Colab (2–4h, quase tudo espera)
+
+O ambiente você já configurou. Agora é rodar.
+
+## 3.1 Compactar o dataset
+```powershell
+cd C:\Users\Ramos\Documents\AlphaDog\services\ai\data
+Compress-Archive -Path yolo -DestinationPath yolo.zip
+```
+Dá ~800 MB.
+
+## 3.2 Subir para o Drive
+Coloque `yolo.zip` na raiz do seu Google Drive. **Não** faça upload direto no
+Colab — arquivo desse tamanho cai no meio.
+
+## 3.3 Rodar o notebook
+1. [colab.research.google.com](https://colab.research.google.com)
+2. **Arquivo → Fazer upload de notebook**
+3. Escolha `services/ai/notebooks/train_colab.ipynb`
+4. **Ambiente de execução → Alterar o tipo → T4 GPU → Salvar**
+5. Rode as células em ordem
+
+A primeira célula **para** se não houver GPU — de propósito. Em CPU levaria dias.
+
+## 3.4 Guardar o resultado
+A última célula salva no Drive. **Não pule** — o Colab apaga tudo ao
+desconectar, e você não vai querer treinar de novo.
+
+Baixe o `.tflite` e coloque **exatamente** em:
+```
+apps/mobile/assets/models/dogpose.tflite
+```
+
+### Depois me avise
+Ligar o modelo no app é **uma linha** em `apps/mobile/src/vision/useDetector.ts`.
+Eu faço.
+
+---
+
+# 🔴 4. Development build (Expo Go não funciona)
+
+**Por que:** o modo treino usa Vision Camera com frame processor, que roda
+código nativo. O Expo Go não suporta — limitação dele, não nossa.
 
 ### Passo a passo
-
-1. No Supabase, ainda em **Settings → Database**.
-2. Procure **Connection string** (ou **Connection pooling**).
-3. Você precisa copiar **duas** strings diferentes. Elas parecem iguais, mas a
-   **porta muda** — preste atenção nesse número:
-
-   | Qual | Porta | Onde encontrar |
-   | --- | --- | --- |
-   | **Pooler** | `6543` | Aba **Transaction** ou **Connection pooling** |
-   | **Direta** | `5432` | Aba **Direct connection** ou **Session** |
-
-4. Na pasta do projeto (`C:\Users\Ramos\Documents\AlphaDog`), crie um arquivo
-   chamado exatamente **`.env.local`**.
-5. Cole isto dentro, trocando os valores:
-
-```bash
-DATABASE_URL="cole-aqui-a-string-da-porta-6543"
-DIRECT_URL="cole-aqui-a-string-da-porta-5432"
-```
-
-6. Nas duas strings, troque `[YOUR-PASSWORD]` pela senha nova do item 1.
-7. Salve.
-
-### Por que duas strings?
-
-Não é firula. São coisas diferentes:
-
-- **A porta 6543 (pooler)** é o que o site usa no dia a dia. Servidor sem estado
-  abre e fecha muita conexão; o pooler segura isso. Sem ele o Postgres esgota as
-  conexões e o site cai sob tráfego.
-- **A porta 5432 (direta)** é usada só para criar/alterar tabelas. O pooler não
-  aceita esses comandos.
-
-### Conferindo se funcionou
-
-No terminal, dentro da pasta do projeto:
-
 ```powershell
-npm run db:push
+npm install -g eas-cli
+eas login
+cd C:\Users\Ramos\Documents\AlphaDog\apps\mobile
+eas build:configure
+eas build --profile development --platform android
 ```
 
-Deve aparecer algo como *"Your database is now in sync with your Prisma schema"*.
-Se der erro de autenticação, a senha no `.env.local` está errada.
+Conta grátis em [expo.dev](https://expo.dev). Fila de 10–30 min. Ao final, um
+link: abra no celular e instale o APK.
 
-> ✅ O `.env.local` **nunca** vai para o GitHub — já configurei o `.gitignore`.
-> O arquivo `.env.example` é só o modelo, e fica **sempre vazio**.
-
----
-
-# 🔴 3. Tirar a prova social inventada
-
-**Por quê:** **eu inventei todos esses números e depoimentos** para preencher o
-layout. Publicar como se fossem reais é **propaganda enganosa** — Código de
-Defesa do Consumidor, artigo 37. O CONAR também pega. Multa e obrigação de tirar
-o ar.
-
-**Isto não é opinião de design. É risco jurídico real.**
-
-### O que está inventado
-
-| Onde | O que | Arquivo |
-| --- | --- | --- |
-| Home (faixa de números) | "+120 mil tutores", "4,8/5" | `src/lib/content/marketing.ts` |
-| Home (depoimentos) | Marina R., Rafael M., Carolina S. | `src/lib/content/marketing.ts` |
-| Funil | "94% relatam melhora em 4 semanas", "8 em cada 10 tutores" | `src/features/quiz/funnel-config.ts` |
-| /avaliacoes | Os 9 depoimentos | `src/lib/content/reviews.ts` |
-
-### Suas três opções
-
-**A. Ainda não tem clientes** → me avise e eu troco os números por afirmações
-verificáveis sobre o método ("sessões de 10 minutos", "reforço positivo"), sem
-inventar resultado. Também posso remover a página `/avaliacoes` até existirem
-avaliações reais.
-
-**B. Já tem clientes** → me mande os depoimentos e números reais que eu troco.
-Peça autorização por escrito para usar nome e foto (também é LGPD).
-
-**C. Quer manter até conseguir os reais** → não recomendo. O risco é seu, mas o
-CDC não aceita "era temporário" como defesa.
-
----
-
-# 🔴 4. Dados da empresa
-
-**Por quê:** os textos legais e a página de contato têm marcadores no lugar dos
-dados reais. Vender com `[RAZÃO SOCIAL]` no site é ilegal — o CDC exige
-identificação clara do fornecedor.
-
-**Onde aparece:** `/termos`, `/privacidade`, `/contato`.
-
-### Me mande
-
-- Razão social (nome da empresa no CNPJ, não o nome fantasia)
-- CNPJ
-- Endereço completo com CEP
-- E-mail oficial de contato (hoje está `suporte@alphadog.com.br`, que inventei)
-
-Se ainda não tem CNPJ: dá para desenvolver, **mas não dá para cobrar**. Abrir
-MEI leva ~1 dia em [gov.br/mei](https://www.gov.br/mei).
-
----
-
-# 🔴 5. Advogado revisar os textos legais
-
-**Por quê:** escrevi Termos, Privacidade, Política de Assinatura e Garantia
-refletindo o que o produto faz de verdade (renovação automática, garantia de 30
-dias, cancelamento sem multa, direito de arrependimento do art. 49 do CDC).
-
-**Mas eu não sou advogado.** Cobrança recorrente no Brasil tem regra específica,
-e a LGPD tem exigências que texto genérico não cobre.
-
-**Quando:** antes de cobrar do primeiro cliente. Não antes disso.
-
-**Como:** advogado de direito do consumidor / digital. Mande os arquivos:
-
-- `src/lib/content/legal.ts` — todos os textos
-- `prisma/schema.prisma` — mostra que dados são coletados (importa para a LGPD)
-
-Uma revisão dessas custa em torno de R$ 800–2.500. É barato perto de uma multa
-do Procon.
-
----
-
-# 🟡 6. Dataset de cães (para a IA)
-
-**Por quê:** para treinar o modelo que reconhece a postura do cão. Sem isto não
-existe treinador com câmera.
-
-**Tempo:** 20 min de trabalho + tempo de download.
-
-## 6.1 — StanfordExtra (as anotações)
-
-São os pontos do corpo do cão marcados em 12.000 fotos.
-
-1. Abra [github.com/benjiebob/StanfordExtra](https://github.com/benjiebob/StanfordExtra).
-2. Leia o README até achar o link do **formulário de acesso** (Google Forms).
-3. Preencha. Uso: **pesquisa e desenvolvimento de produto**. É gratuito.
-4. Você recebe por e-mail o link do arquivo **`StanfordExtra_v12.json`**.
-5. Salve em: `services/ai/data/StanfordExtra_v12.json`
-
-## 6.2 — Stanford Dogs (as fotos)
-
-O StanfordExtra só tem as anotações. As fotos vêm daqui.
-
-1. Abra [vision.stanford.edu/aditya86/ImageNetDogs](http://vision.stanford.edu/aditya86/ImageNetDogs/).
-2. Baixe **Images** (`images.tar`, ~750 MB).
-3. Extraia. Vai virar uma pasta `Images/` com uma subpasta por raça
-   (`n02085620-Chihuahua`, etc).
-4. Coloque em: `services/ai/data/stanford_dogs/Images/`
-
-## 6.3 — Conferir
-
-No terminal:
-
+### Para rodar depois
 ```powershell
-cd services\ai
-.\.venv\Scripts\python.exe scripts\prepare_dataset.py --json data\StanfordExtra_v12.json --images data\stanford_dogs\Images --out data\yolo
+cd C:\Users\Ramos\Documents\AlphaDog\apps\mobile
+pnpm start
 ```
+Abra **o app instalado** (não o Expo Go) e escaneie o QR.
 
-**Este comando é seguro.** Não baixa nada, não muda nada fora da pasta `data`.
-Se o caminho estiver errado, ele avisa e para.
-
-Deve terminar com algo como:
-
-```
-escritos: 10245 treino, 1808 validação
-yaml: data\yolo\dogs.yaml
-```
-
-Me avise quando aparecer isso.
-
-> ℹ️ Vai aparecer um aviso sobre SRD (vira-lata). É esperado — decidimos tratar
-> isso depois. Não é erro.
+> Se der "pnpm não reconhecido": abra o terminal como **este** (o PATH do pnpm
+> está em `C:\Users\Ramos\AppData\Roaming\npm`). Ou use `npx pnpm start`.
 
 ---
 
-# 🟡 7. GPU para treinar
+# 🟡 5. Celular Android intermediário
 
-**Por quê:** treinar o modelo na sua máquina levaria **dias** (ela não tem placa
-de vídeo dedicada para isso). Numa GPU leva **2–4 horas**.
+Emulador não tem câmera real e usa a CPU do PC — o FPS medido seria mentira.
 
-**Custo:** grátis (Colab) ou ~R$ 15 (RunPod).
+Use Moto G, Samsung A, Redmi. **Não use seu melhor aparelho**: se só rodar no
+top de linha, não roda para a maioria dos seus clientes.
 
-## Opção A — Google Colab (grátis, recomendado para começar)
-
-1. Abra [colab.research.google.com](https://colab.research.google.com).
-2. **Arquivo → Novo notebook**.
-3. **Ambiente de execução → Alterar o tipo de ambiente de execução**.
-4. Em *Acelerador de hardware*, escolha **T4 GPU**. Salvar.
-5. Me avise — eu preparo o notebook com os comandos prontos.
-
-**Limitação:** o Colab grátis desconecta após ~4h de inatividade e tem fila em
-horário de pico. Para um primeiro treino, resolve.
-
-## Opção B — RunPod (pago, mais confiável)
-
-Se o Colab desconectar no meio do treino, vale pagar. ~US$ 0,30/hora numa RTX
-4090; um treino completo sai por menos de US$ 2.
+Ative **Opções do desenvolvedor** → **Depuração USB**.
 
 ---
 
-# 🟡 8. Celular Android para medir velocidade
+# 🟢 6. Antes de lançar de verdade
 
-**Por quê:** o app precisa processar **15 quadros por segundo** para o feedback
-chegar a tempo do cão associar. Emulador **não serve** — ele usa a CPU do PC e o
-número seria mentira.
+Não bloqueia o desenvolvimento, mas bloqueia a operação comercial. Está no
+`docs/PENDENCIAS.md` original com detalhe:
 
-**O que serve:** um Android intermediário, tipo Moto G, Samsung A-series, Xiaomi
-Redmi. **Não use seu melhor aparelho** — se funcionar só no top de linha, não
-funciona para a maioria dos seus clientes.
-
-Quando chegarmos nessa fase eu te digo exatamente o que instalar.
-
----
-
-# 🟢 9. Fotos de cães
-
-**Por quê:** o hero (primeira dobra do site) tem hoje um **placeholder** dentro
-do celular — um fundo verde com patinhas. Não tenho ferramenta de gerar imagem.
-
-**O que precisa:** uma foto vertical de cães felizes, boa qualidade, que caiba
-na tela do celular do mockup.
-
-### Suas opções
-
-| Como | Custo | Observação |
-| --- | --- | --- |
-| Foto sua / de clientes | R$ 0 | Melhor opção: é real e é seu |
-| Banco pago (Getty, Adobe Stock) | ~R$ 50–200 | Confira a licença para uso comercial |
-| Banco grátis (Unsplash, Pexels) | R$ 0 | Verifique a licença; qualidade varia |
-| Gerar por IA (Midjourney, DALL·E) | ~R$ 60/mês | Confira os termos para uso comercial |
-
-**Formato:** vertical, mínimo 552×1120 pixels.
-
-**Onde colocar:** substitua o arquivo
-`public/brand/hero-app-dogs.png`. O layout não muda — é só trocar o arquivo.
-
-> ⚠️ Não use foto do Google Imagens. É violação de direito autoral e dá processo.
+- **Prova social inventada** no site (números e depoimentos) — trocar ou remover
+- **Dados da empresa** (`[RAZÃO SOCIAL]`, `[CNPJ]`) nos textos legais
+- **Revisão jurídica** dos termos (CDC + LGPD)
+- **Foto de cães** no hero do site (hoje é placeholder)
+- **Stripe** (só quando for cobrar)
 
 ---
 
-# 🟢 10. Stripe (só quando for cobrar)
+# Sua lista
 
-Deixe para quando o checkout for implementado.
-
-1. Crie conta em [dashboard.stripe.com/register](https://dashboard.stripe.com/register).
-2. Ative a conta brasileira (precisa de CNPJ — ver item 4).
-3. **Deixe em modo de teste** (chave começa com `sk_test_`).
-4. Em **Developers → API keys**, copie a *Secret key*.
-5. Adicione no `.env.local`.
-
-> ⚠️ **PIX no Stripe exige conta brasileira aprovada.** Se demorar ou não sair,
-> a alternativa é Mercado Pago — já deixei a arquitetura pronta para trocar de
-> gateway sem reescrever nada.
+- [ ] 🔴 Desligar Confirm email **e clicar Save** → validar com `db-smoke.mjs`
+- [ ] 🔴 Rotular até 60 por classe (falta ~170 fotos, ~25 min)
+- [ ] 🔴 Compactar `data/yolo`, subir no Drive, rodar o notebook
+- [ ] 🔴 Baixar o `.tflite` para `apps/mobile/assets/models/` e me avisar
+- [ ] 🔴 Gerar o development build (EAS)
+- [ ] 🟡 Android intermediário com depuração USB
+- [ ] 🟢 Prova social, dados da empresa, jurídico, fotos (antes de lançar)
 
 ---
 
-# Resumo — sua lista
+## O que o app faz hoje — sem o modelo
 
-Copie para onde você organiza tarefas:
+Tudo funciona de verdade, inclusive o treino:
 
-- [ ] 🔴 Trocar senha do Supabase
-- [ ] 🔴 Criar `.env.local` com as duas connection strings
-- [ ] 🔴 Decidir o que fazer com a prova social inventada
-- [ ] 🔴 Mandar razão social, CNPJ e endereço
-- [ ] 🔴 Contratar advogado para revisar os textos legais (antes de cobrar)
-- [ ] 🟡 Preencher formulário do StanfordExtra
-- [ ] 🟡 Baixar Stanford Dogs
-- [ ] 🟡 Rodar `prepare_dataset.py` e me avisar
-- [ ] 🟡 Abrir conta no Google Colab
-- [ ] 🟡 Separar um Android intermediário
-- [ ] 🟢 Conseguir foto de cães para o hero
-- [ ] 🟢 Conta Stripe (depois)
+| Fluxo | Estado |
+| --- | --- |
+| Criar conta / entrar | Real, sessão persistente |
+| Onboarding (9 campos) | Real, salva no banco |
+| Dashboard | Real: progresso, sequência, semana, recomendação |
+| Treinos com passos | Real |
+| Abrir câmera | Real |
+| Modo treino | **Real** — o tutor toca "Ele acertou", a sessão conta e grava |
+| Feedback automático da IA | Só quando o `.tflite` chegar |
+| Histórico | Real, calculado das sessões |
+| Perfil + foto | Real, upload para o Storage |
 
----
+### Por que o botão manual, e não IA simulada
 
-## Travou em algo?
+O modelo ainda não existe. Em vez de sortear postura e fingir que a câmera vê, o
+tutor marca o acerto — e a sessão conta de verdade.
 
-Me manda **o comando que você rodou** e **a mensagem de erro inteira** (copiada,
-não printada, se der). Quase todo erro de setup é caminho de arquivo errado ou
-senha, e a mensagem completa mostra qual dos dois.
+Um "Excelente!" automático sem o cão ter sentado ensinaria o tutor a recompensar
+o comportamento errado, e o app passaria a **piorar** o treino. Então a IA só
+fala quando souber. Até lá, quem julga é quem está vendo o cão.
+
+Quando o `.tflite` entrar, o botão manual continua útil — a pata sai do quadro, o
+cão fica de costas. O app registra os dois separados (`manualCount`).
+
+## Travou?
+
+Me manda o **comando** e a **mensagem de erro inteira**. Quase todo erro aqui é
+caminho de arquivo, PATH ou chave trocada.
