@@ -1,0 +1,54 @@
+{
+  "expo": {
+    "name": "AlphaDog",
+    "slug": "alphadog",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "alphadog",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#0B0E14",
+      "resizeMode": "contain"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.alphadog.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "O AlphaDog usa a câmera para acompanhar o treino do seu cão e dar feedback em tempo real. O vídeo é processado no seu aparelho e nunca sai dele.",
+        "NSPhotoLibraryUsageDescription": "Para escolher a foto de perfil do seu cão."
+      }
+    },
+    "android": {
+      "package": "com.alphadog.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#0B0E14"
+      },
+      "permissions": ["android.permission.CAMERA"]
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "react-native-vision-camera",
+        {
+          "cameraPermissionText": "O AlphaDog usa a câmera para acompanhar o treino do seu cão. O vídeo é processado no seu aparelho e nunca sai dele.",
+          "enableCodeScanner": false,
+          "enableMicrophonePermission": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermissionText": "Para escolher a foto de perfil do seu cão."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "supabaseUrl": "${EXPO_PUBLIC_SUPABASE_URL}",
+      "supabaseAnonKey": "${EXPO_PUBLIC_SUPABASE_ANON_KEY}"
+    }
+  }
+}

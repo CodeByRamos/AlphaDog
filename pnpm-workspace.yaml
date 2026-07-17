@@ -2,6 +2,16 @@ packages:
   - "apps/*"
   - "packages/*"
 
+# One React types version across the workspace.
+#
+# Expo pins ~19.1 and Next wants ^19; pnpm resolved both, and two copies of
+# @types/react make JSX types structurally incompatible -- a valid <svg> in the
+# website suddenly fails to typecheck because it is checked against the other
+# copy's SVGProps. The error points at the component and says nothing about
+# versions, so it costs an hour to diagnose.
+overrides:
+  "@types/react": "19.1.0"
+
 # services/ai is Python. It stays out of the pnpm workspace on purpose: it has
 # its own pyproject.toml and does not belong in the Turborepo build graph.
 

@@ -3,18 +3,22 @@
  *
  * Escrito à mão em vez de gerado: o schema é pequeno e estável, e depender do
  * `supabase gen types` exigiria a CLI logada no CI. Se a migration mudar, este
- * arquivo muda junto — o teste de integração pega a divergência.
+ * arquivo muda junto.
+ *
+ * O `Relationships: []` não é decoração — o supabase-js exige a chave para
+ * casar com o genérico dele. Sem ela, a inferência colapsa para `never` e todo
+ * insert vira erro de tipo.
  */
 
 import type {
   AgeGroup,
   Difficulty,
   EnergyLevel,
+  ExerciseId,
   ExperienceLevel,
   Gender,
   Goal,
 } from "@alphadog/core";
-import type { ExerciseId } from "@alphadog/core";
 
 export type DogRow = {
   id: string;
@@ -47,24 +51,41 @@ export type SessionRow = {
   ended_at: string | null;
 };
 
+/** O que o banco preenche sozinho — opcional no insert. */
+type DogInsert = Omit<DogRow, "id" | "created_at" | "updated_at"> &
+  Partial<Pick<DogRow, "id" | "created_at" | "updated_at">>;
+
+type SessionInsert = Omit<SessionRow, "id" | "started_at"> &
+  Partial<Pick<SessionRow, "id" | "started_at">>;
+
 export type Database = {
   public: {
     Tables: {
       dogs: {
         Row: DogRow;
-        Insert: Omit<DogRow, "id" | "created_at" | "updated_at"> & {
-          id?: string;
-        };
+        Insert: DogInsert;
+        // owner_id fora do Update: mudar o dono de um cão não é operação que o
+        // app deva expor, e o RLS negaria de qualquer forma.
         Update: Partial<Omit<DogRow, "id" | "owner_id" | "created_at">>;
+        Relationships: [];
       };
       training_sessions: {
         Row: SessionRow;
-        Insert: Omit<SessionRow, "id" | "started_at"> & {
-          id?: string;
-          started_at?: string;
-        };
+        Insert: SessionInsert;
         Update: Partial<Omit<SessionRow, "id" | "owner_id" | "dog_id">>;
+        Relationships: [];
       };
     };
+    Views: Record<never, never>;
+    Functions: Record<never, never>;
+    Enums: {
+      dog_age_group: AgeGroup;
+      dog_gender: Gender;
+      dog_energy: EnergyLevel;
+      dog_experience: ExperienceLevel;
+      training_goal: Goal;
+      exercise_id: ExerciseId;
+    };
+    CompositeTypes: Record<never, never>;
   };
 };
