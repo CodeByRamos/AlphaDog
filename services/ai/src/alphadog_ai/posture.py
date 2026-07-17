@@ -59,6 +59,12 @@ class PostureReading:
 # Valores iniciais, a calibrar com dados reais no spike. Estão aqui como
 # constantes nomeadas, e não espalhados no código, porque são o que muda quando
 # as métricas de falso positivo saírem.
+#
+# AVISO já observado no rotulador: a caixa do StanfordExtra é justa ao corpo, e
+# um cão em pé DE PERFIL COM A CABEÇA ERGUIDA dá razão ~0.97 — que estes
+# limiares leriam como sentado. É por isso que `classify_posture` exige acordo
+# com a geometria e devolve UNKNOWN no conflito: a caixa sozinha erraria aqui.
+# A calibração real destes números depende do conjunto rotulado.
 
 #: Acima disto a caixa é claramente mais larga que alta: cão de perfil, em pé.
 STANDING_ASPECT_MIN = 1.15
