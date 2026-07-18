@@ -1,7 +1,7 @@
-import type { Detection, Exercise, SessionState } from "@alphadog/core";
+import type { Exercise, SessionState } from "@alphadog/core";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, {
   FadeIn,

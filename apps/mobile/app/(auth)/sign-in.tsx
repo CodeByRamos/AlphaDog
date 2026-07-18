@@ -8,7 +8,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  View,
 } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Button } from "../../src/components/Button";
