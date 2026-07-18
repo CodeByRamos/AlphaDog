@@ -128,17 +128,22 @@ Eu faço.
 **Por que:** o modo treino usa Vision Camera com frame processor, que roda
 código nativo. O Expo Go não suporta — limitação dele, não nossa.
 
-### Passo a passo
+Já deixei pronto o que não precisa da sua conta: o `eas-cli` está **instalado**
+(`eas --version` → 21.0.2) e o `eas.json` já existe com o perfil `development`.
+Você começa direto no login:
+
 ```powershell
-npm install -g eas-cli
 eas login
 cd C:\Users\Ramos\Documents\AlphaDog\apps\mobile
-eas build:configure
 eas build --profile development --platform android
 ```
 
-Conta grátis em [expo.dev](https://expo.dev). Fila de 10–30 min. Ao final, um
-link: abra no celular e instale o APK.
+Conta grátis em [expo.dev](https://expo.dev). O `eas build:configure` não é mais
+necessário — o `eas.json` já está no repo. Fila de 10–30 min. Ao final, um link:
+abra no celular e instale o APK.
+
+> Não fiz o `eas login` nem o `eas build` por você: os dois autenticam na sua
+> conta Expo, e eu não digito senha nas suas contas. O resto está pronto.
 
 ### Para rodar depois
 ```powershell
