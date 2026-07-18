@@ -11,10 +11,12 @@ de rotulagem, um treino no Colab e um build no celular.
 | --- | --- |
 | Banco + RLS | ✅ testado com a anon key real: anônimo não lê nem escreve (erro 42501) |
 | Sua `anon key` | ✅ é `anon`, não `service_role` |
-| App mobile completo | ✅ typecheck limpo, 58 testes no core |
-| Website | ✅ buildando |
-| Ícone e splash | ✅ gerados |
-| Dataset Stanford | ✅ 12.538 imagens convertidas, 120 raças, zero puladas |
+| App mobile completo | ✅ typecheck limpo, 58 testes no core + 46 no mobile |
+| Website | ✅ `next build` verde (conferido agora — achei e consertei um `@types/react` duplicado que quebrava) |
+| Build do celular | ✅ `eas.json` + deps prontos, `expo-doctor` 18/18 |
+| Ícone e splash | ✅ gerados e ligados no `app.json` |
+| Dataset Stanford | ✅ 12.538 imagens, 120 raças; labels validados (77 colunas, 24 keypoints) |
+| Zip do Colab | ✅ `services/ai/data/yolo.zip` pronto (493 MB, barras corretas p/ Linux) |
 | Rótulos de postura | ✅ **234 rótulos** — o Claude rotulou olhando cada foto; gate `pronto` |
 
 **Legenda:** 🔴 bloqueia · 🟡 trava só uma parte · 🟢 melhora
