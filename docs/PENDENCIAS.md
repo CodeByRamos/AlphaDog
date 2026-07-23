@@ -95,31 +95,55 @@ services/ai/data/yolo.zip   (~493 MB, 12.538 imagens, 0 caminhos quebrados)
 > Se um dia precisar refazer, rode `services/ai/scripts/zip_dataset.py`, nunca o
 > `Compress-Archive`.
 
-## 3.2 Subir para o Drive
-Coloque `services/ai/data/yolo.zip` na **raiz** do seu Google Drive. **Não** faça
-upload direto no Colab — arquivo desse tamanho cai no meio.
+## 3.2 Use o **Kaggle**, não o Colab
 
-## 3.3 Rodar o notebook
-1. [colab.research.google.com](https://colab.research.google.com)
-2. **Arquivo → Fazer upload de notebook**
-3. Escolha `services/ai/notebooks/train_colab.ipynb`
-4. **Ambiente de execução → Alterar o tipo → T4 GPU → Salvar**
-5. Rode as células em ordem
+O Colab grátis não dá conta deste treino. Não foi você — o notebook original
+pedia 100 épocas (3–4 h de T4 seguidas), e o Colab grátis desconecta e corta a
+cota antes disso.
 
-A primeira célula **para** se não houver GPU — de propósito. Em CPU levaria dias.
+| | Colab grátis | Kaggle grátis |
+| --- | --- | --- |
+| GPU | cota curta, já estourada | **30 h por semana** |
+| Desconectou | perde tudo | **roda em background no servidor deles** |
+| Dataset | re-upload toda vez | sobe **uma vez**, fica salvo |
 
-## 3.4 Guardar o resultado
-A última célula salva no Drive. **Não pule** — o Colab apaga tudo ao
-desconectar, e você não vai querer treinar de novo.
+O botão **Save & Run All** do Kaggle é o que resolve: o notebook roda nos
+servidores deles, você **fecha o navegador e desliga o PC**, e ele termina.
 
-Baixe o `.tflite` e coloque **exatamente** em:
+### Passo a passo
+
+1. Crie conta em [kaggle.com](https://www.kaggle.com) (grátis) e **verifique o
+   telefone** — sem isso a GPU e a internet do notebook ficam bloqueadas.
+2. **kaggle.com/datasets → New Dataset** → suba `services/ai/data/yolo.zip`.
+   O Kaggle descompacta sozinho. Isso é feito **uma vez só**.
+3. **kaggle.com/code → New Notebook → File → Import Notebook** → escolha
+   `services/ai/notebooks/train_kaggle.ipynb`.
+4. Na barra lateral direita:
+   - **Input → Add Input → Datasets** → escolha o dataset que você criou
+   - **Accelerator** → `GPU T4 x2`
+   - **Internet** → `On`
+5. **Save Version → Save & Run All (Commit)**. Feche a aba. Vá dormir.
+6. Volte, abra a versão, aba **Output**, baixe o `.tflite`.
+
+### O que mudou no treino (por isso agora termina)
+- **`time=3.0`** — teto de 3 horas. O ultralytics para sozinho e salva o melhor
+  peso, em vez de estourar a cota no meio do caminho.
+- **retomada** — se já existe `last.pt`, continua de onde parou.
+- **60 épocas com `patience=10`** — normalmente para antes; fine-tune de uma
+  classe converge bem antes das 100 originais.
+
+## 3.3 Guardar o resultado
+
+Baixe o `.tflite` da aba **Output**, renomeie para `dogpose.tflite` e coloque em:
 ```
 apps/mobile/assets/models/dogpose.tflite
 ```
 
 ### Depois me avise
-Ligar o modelo no app é **uma linha** em `apps/mobile/src/vision/useDetector.ts`.
-Eu faço.
+Eu ligo o modelo no app (dep nativa + decode + wiring, testados juntos).
+
+> **Isto não bloqueia sua entrega.** O app funciona sem o modelo — o tutor marca
+> o acerto e a sessão conta de verdade. O treino é melhoria, não pré-requisito.
 
 ---
 
