@@ -80,9 +80,10 @@ cd C:\Users\Ramos\Documents\AlphaDog\services\ai
 
 ---
 
-# 🔴 3. Treinar no Colab (2–4h, quase tudo espera)
+# 🟡 3. Treinar a IA — no Kaggle (NÃO bloqueia sua entrega)
 
-O ambiente você já configurou. Agora é rodar.
+**Leia isto antes de surtar:** o app entrega sem o modelo. O tutor marca "Ele
+acertou" e a sessão conta de verdade. Este passo é melhoria, não pré-requisito.
 
 ## 3.1 O zip já está pronto — não precisa compactar
 Eu já gerei pra você:
