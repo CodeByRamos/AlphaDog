@@ -210,9 +210,9 @@ Não bloqueia o desenvolvimento, mas bloqueia a operação comercial. Está no
 
 - [ ] 🔴 Desligar Confirm email **e clicar Save** → validar com `db-smoke.mjs`
 - [x] ✅ ~~Rotular postura~~ — feito pelo Claude, 234 rótulos, gate `pronto`
-- [ ] 🔴 Compactar `data/yolo`, subir no Drive, rodar o notebook
-- [ ] 🔴 Baixar o `.tflite` para `apps/mobile/assets/models/` e me avisar
-- [ ] 🔴 Gerar o development build (EAS)
+- [ ] 🔴 **Gerar o development build (EAS)** ← caminho crítico da entrega
+- [ ] 🟡 Treinar no Kaggle (roda em background, não bloqueia a entrega)
+- [ ] 🟡 Baixar o `.tflite` para `apps/mobile/assets/models/` e me avisar
 - [ ] 🟡 Android intermediário com depuração USB
 - [ ] 🟢 Prova social, dados da empresa, jurídico, fotos (antes de lançar)
 
