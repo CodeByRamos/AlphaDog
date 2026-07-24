@@ -1,4 +1,11 @@
-import { EXERCISES, feedbackText, feedbackTone, type ExerciseId } from "@alphadog/core";
+import {
+  CATEGORY_LABEL,
+  DIFFICULTY_LABEL,
+  EXERCISES,
+  feedbackText,
+  feedbackTone,
+  type ExerciseId,
+} from "@alphadog/core";
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -63,7 +70,12 @@ export default function TrainingScreen() {
 
           <Animated.View entering={FadeInDown.duration(duration.normal)}>
             <Text style={[type.hero, { color: color.bone }]}>{exercise.name}</Text>
-            <Text style={[type.body, { color: color.ink400, marginTop: space.sm }]}>
+            <View style={styles.metaRow}>
+              <Text style={styles.metaChip}>{CATEGORY_LABEL[exercise.category]}</Text>
+              <Text style={styles.metaChip}>{DIFFICULTY_LABEL[exercise.difficulty]}</Text>
+              <Text style={styles.metaChip}>{exercise.minutes} min</Text>
+            </View>
+            <Text style={[type.body, { color: color.ink400, marginTop: space.md }]}>
               {exercise.description}
             </Text>
           </Animated.View>
@@ -94,6 +106,20 @@ export default function TrainingScreen() {
                 <Text style={[type.label, { color: color.alpha500 }]}>Erro comum</Text>
                 <Text style={[type.bodySmall, { color: color.ink300, marginTop: 2 }]}>
                   {exercise.tip}
+                </Text>
+              </View>
+            </Card>
+          </Animated.View>
+
+          <Animated.View entering={FadeInDown.duration(duration.normal).delay(150)}>
+            <Card style={styles.completion}>
+              <Ionicons name="ribbon" size={18} color={color.sage400} />
+              <View style={{ flex: 1 }}>
+                <Text style={[type.label, { color: color.sage400 }]}>
+                  Quando está dominado
+                </Text>
+                <Text style={[type.bodySmall, { color: color.ink300, marginTop: 2 }]}>
+                  {exercise.completion}
                 </Text>
               </View>
             </Card>
@@ -197,6 +223,18 @@ const styles = StyleSheet.create({
   },
   stepNumText: { fontFamily: "Sora_800ExtraBold", fontSize: 13, color: color.ink900 },
   tip: { flexDirection: "row", gap: space.md, backgroundColor: "rgba(240,167,60,0.08)", borderColor: color.alpha600 },
+  completion: { flexDirection: "row", gap: space.md, backgroundColor: "rgba(62,142,126,0.08)", borderColor: color.sage600 },
+  metaRow: { flexDirection: "row", gap: space.sm, marginTop: space.md },
+  metaChip: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 12,
+    color: color.ink300,
+    backgroundColor: color.ink800,
+    paddingHorizontal: space.md,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    overflow: "hidden",
+  },
   footer: { padding: space.xl, borderTopWidth: 1, borderTopColor: color.ink800 },
   center: { justifyContent: "center", padding: space.xl },
   done: { gap: space.lg, alignItems: "center" },

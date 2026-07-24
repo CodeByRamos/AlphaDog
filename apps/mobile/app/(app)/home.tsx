@@ -1,4 +1,12 @@
-import { DIFFICULTY_LABEL, EXERCISE_LIST, EXERCISES, type Exercise } from "@alphadog/core";
+import {
+  CATEGORY_LABEL,
+  CATEGORY_ORDER,
+  DIFFICULTY_LABEL,
+  EXERCISE_LIST,
+  EXERCISES,
+  exercisesByCategory,
+  type Exercise,
+} from "@alphadog/core";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -115,19 +123,32 @@ export default function HomeScreen() {
           </Animated.View>
         ) : null}
 
-        {/* Catálogo */}
+        {/* Biblioteca, agrupada por categoria */}
         <Animated.View entering={FadeInDown.duration(duration.normal).delay(300)}>
-          <Text style={[type.overline, styles.sectionTitle]}>Todos os treinos</Text>
-          <View style={styles.exerciseList}>
-            {EXERCISE_LIST.filter((e) => e.id !== recommended?.id).map((exercise) => (
-              <ExerciseCard
-                key={exercise.id}
-                exercise={exercise}
-                mastered={stats.masteredExercises.includes(exercise.id)}
-                onPress={() => router.push(`/training/${exercise.id}`)}
-              />
-            ))}
-          </View>
+          <Text style={[type.overline, styles.sectionTitle]}>Biblioteca de treinos</Text>
+          {CATEGORY_ORDER.map((category) => {
+            const items = exercisesByCategory(category).filter(
+              (e) => e.id !== recommended?.id,
+            );
+            if (items.length === 0) return null;
+            return (
+              <View key={category} style={styles.categoryBlock}>
+                <Text style={[type.label, styles.categoryLabel]}>
+                  {CATEGORY_LABEL[category]}
+                </Text>
+                <View style={styles.exerciseList}>
+                  {items.map((exercise) => (
+                    <ExerciseCard
+                      key={exercise.id}
+                      exercise={exercise}
+                      mastered={stats.masteredExercises.includes(exercise.id)}
+                      onPress={() => router.push(`/training/${exercise.id}`)}
+                    />
+                  ))}
+                </View>
+              </View>
+            );
+          })}
         </Animated.View>
 
         {/* Última sessão */}
@@ -282,6 +303,8 @@ const styles = StyleSheet.create({
   barTrack: { flex: 1, width: "100%", justifyContent: "flex-end" },
   bar: { width: "100%", borderRadius: radius.sm, minHeight: 4 },
   exerciseList: { gap: space.md },
+  categoryBlock: { marginBottom: space.lg },
+  categoryLabel: { color: color.alpha400, marginBottom: space.sm },
   exercise: { gap: space.md },
   exerciseHead: { flexDirection: "row", alignItems: "center", gap: space.md },
   exerciseTitleRow: { flexDirection: "row", alignItems: "center", gap: space.sm },
