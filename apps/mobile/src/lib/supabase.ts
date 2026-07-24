@@ -13,9 +13,18 @@ import type { Database } from "./database.types";
  *
  * A service_role key é o oposto e NUNCA pode entrar aqui: ela ignora RLS.
  */
+// EXPO_PUBLIC_* são substituídas pelo valor real dentro do bundle pelo Metro, a
+// partir do .env — é a fonte primária e a que funciona em runtime no aparelho.
+//
+// O `extra` do app.json é só um fallback, e NÃO pode ser lido primeiro: o
+// app.json é JSON estático e não interpola `${...}`, então `extra.supabaseUrl`
+// vinha como o texto literal "${EXPO_PUBLIC_SUPABASE_URL}" — uma string não-nula
+// que passava no `??` e quebrava o cliente com "Invalid supabaseUrl". Ler do
+// process.env primeiro elimina isso.
 const extra = Constants.expoConfig?.extra ?? {};
-const url = (extra.supabaseUrl as string) ?? process.env.EXPO_PUBLIC_SUPABASE_URL;
-const anonKey = (extra.supabaseAnonKey as string) ?? process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+const url = process.env.EXPO_PUBLIC_SUPABASE_URL ?? (extra.supabaseUrl as string | undefined);
+const anonKey =
+  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? (extra.supabaseAnonKey as string | undefined);
 
 if (!url || !anonKey) {
   // Falha alto no boot em vez de dar erro obscuro na primeira query.

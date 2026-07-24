@@ -53,8 +53,6 @@
       "typedRoutes": true
     },
     "extra": {
-      "supabaseUrl": "${EXPO_PUBLIC_SUPABASE_URL}",
-      "supabaseAnonKey": "${EXPO_PUBLIC_SUPABASE_ANON_KEY}",
       "router": {},
       "eas": {
         "projectId": "18d03321-e6ab-4720-ac4d-41ddd227c3cc"
