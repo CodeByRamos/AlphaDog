@@ -13,10 +13,17 @@ const monorepoRoot = path.resolve(projectRoot, "../..");
 
 const config = getDefaultConfig(projectRoot);
 
-config.watchFolders = [monorepoRoot];
+// Acrescenta a raiz do monorepo em vez de substituir: o Expo já popula
+// watchFolders com o que precisa (assets, .expo), e sobrescrever aquela lista
+// derruba silenciosamente coisas que só falham em runtime.
+config.watchFolders = [...new Set([...(config.watchFolders ?? []), monorepoRoot])];
+
 config.resolver.nodeModulesPaths = [
-  path.resolve(projectRoot, "node_modules"),
-  path.resolve(monorepoRoot, "node_modules"),
+  ...new Set([
+    ...(config.resolver.nodeModulesPaths ?? []),
+    path.resolve(projectRoot, "node_modules"),
+    path.resolve(monorepoRoot, "node_modules"),
+  ]),
 ];
 
 module.exports = config;
