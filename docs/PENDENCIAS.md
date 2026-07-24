@@ -61,6 +61,38 @@ Tem que terminar em **`RLS OK`**. Se ainda falhar em "sessão criada", não salv
 
 ---
 
+# 🔴 1.5 Ligar o paywall no banco (senão o app tranca você também)
+
+O app agora é 100% pago: sem assinatura ativa, ele para na tela de assinatura.
+O gate **fecha por padrão** — é o correto para segurança, mas significa que, até
+você fazer os dois passos abaixo, **nem você entra**.
+
+### Passo 1 — aplicar a migração da tabela de assinaturas
+No **SQL Editor** do [Supabase](https://supabase.com/dashboard) → projeto
+AlphaDog, cole e rode o conteúdo de:
+```
+supabase/migrations/0002_subscriptions.sql
+```
+Isso cria a tabela `subscriptions`, o RLS e a função `has_active_subscription`.
+Sem ela, o app não tem contra o que checar e tranca todo mundo.
+
+### Passo 2 — liberar a SUA conta para testar/demonstrar (comp)
+Ainda no SQL Editor, trocando o e-mail pelo seu:
+```sql
+insert into public.subscriptions (user_id, status, plan_id, current_period_end)
+select id, 'active', 'trimestral', now() + interval '1 year'
+from auth.users where email = 'voce@exemplo.com'
+on conflict (user_id) do update
+  set status = 'active', current_period_end = excluded.current_period_end;
+```
+Pronto: sua conta entra no app; qualquer outra cai na tela de assinatura.
+
+> A cobrança de verdade (Asaas) fica para depois — o botão "Assinar" hoje avisa
+> que o checkout está em configuração, **não** finge que ativou. Ligar o gateway
+> é a Fase 1 do `ROADMAP.md`, precisa das suas chaves de API.
+
+---
+
 # ✅ 2. Rotulagem de postura — FEITA (não precisa mexer)
 
 Você pediu pra eu rodar. Rodei: **234 fotos rotuladas**, olhando cada uma —
