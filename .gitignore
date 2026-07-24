@@ -17,6 +17,9 @@ build/
 # turborepo
 .turbo/
 
+# expo: cache local do dev server, nunca versionar
+.expo/
+
 # misc
 .DS_Store
 *.pem
