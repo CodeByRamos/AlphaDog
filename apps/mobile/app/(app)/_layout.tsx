@@ -1,8 +1,23 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Tabs } from "expo-router";
+import { Redirect, Tabs } from "expo-router";
+import { useSubscription } from "../../src/features/subscription/useSubscription";
+import { useAuth } from "../../src/state/auth";
 import { color, font, space } from "../../src/theme";
 
 export default function AppLayout() {
+  const { session, ready } = useAuth();
+  const { loading, isActive } = useSubscription();
+
+  // Defesa em profundidade: o Gate já manda para /subscribe, mas um deep link
+  // pode cair direto aqui. Só redireciona quando temos certeza (resolvido e sem
+  // acesso) — enquanto carrega, deixa montar para não piscar a UI.
+  if (ready && session && !loading && !isActive) {
+    return <Redirect href="/subscribe" />;
+  }
+  if (ready && !session) {
+    return <Redirect href="/(auth)/sign-in" />;
+  }
+
   return (
     <Tabs
       screenOptions={{

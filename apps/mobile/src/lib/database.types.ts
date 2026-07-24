@@ -18,6 +18,7 @@ import type {
   ExperienceLevel,
   Gender,
   Goal,
+  SubscriptionStatus,
 } from "@alphadog/core";
 
 export type DogRow = {
@@ -51,6 +52,20 @@ export type SessionRow = {
   ended_at: string | null;
 };
 
+export type SubscriptionRow = {
+  id: string;
+  user_id: string;
+  status: SubscriptionStatus;
+  plan_id: string | null;
+  current_period_end: string | null;
+  cancel_at_period_end: boolean;
+  payment_method: string | null;
+  gateway_customer_id: string | null;
+  gateway_subscription_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 /** O que o banco preenche sozinho — opcional no insert. */
 type DogInsert = Omit<DogRow, "id" | "created_at" | "updated_at"> &
   Partial<Pick<DogRow, "id" | "created_at" | "updated_at">>;
@@ -75,6 +90,15 @@ export type Database = {
         Update: Partial<Omit<SessionRow, "id" | "owner_id" | "dog_id">>;
         Relationships: [];
       };
+      // Só leitura pelo app: o webhook (service_role) é quem escreve. Insert e
+      // Update ficam como `never` para o tipo refletir o RLS — tentar gravar
+      // daqui é erro de compilação, não só de runtime.
+      subscriptions: {
+        Row: SubscriptionRow;
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
     };
     Views: Record<never, never>;
     Functions: Record<never, never>;
@@ -85,6 +109,7 @@ export type Database = {
       dog_experience: ExperienceLevel;
       training_goal: Goal;
       exercise_id: ExerciseId;
+      subscription_status: SubscriptionStatus;
     };
     CompositeTypes: Record<never, never>;
   };
