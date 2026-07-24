@@ -67,14 +67,15 @@ O app agora é 100% pago: sem assinatura ativa, ele para na tela de assinatura.
 O gate **fecha por padrão** — é o correto para segurança, mas significa que, até
 você fazer os dois passos abaixo, **nem você entra**.
 
-### Passo 1 — aplicar a migração da tabela de assinaturas
+### Passo 1 — aplicar as migrações pendentes
 No **SQL Editor** do [Supabase](https://supabase.com/dashboard) → projeto
-AlphaDog, cole e rode o conteúdo de:
+AlphaDog, cole e rode, **em ordem**:
 ```
-supabase/migrations/0002_subscriptions.sql
+supabase/migrations/0002_subscriptions.sql   -- tabela subscriptions + RLS + has_active_subscription
+supabase/migrations/0003_exercise_library.sql -- estende o enum exercise_id (11 exercícios)
 ```
-Isso cria a tabela `subscriptions`, o RLS e a função `has_active_subscription`.
-Sem ela, o app não tem contra o que checar e tranca todo mundo.
+Sem a 0002 o app tranca todo mundo (não tem contra o que checar). Sem a 0003, o
+banco recusa gravar sessões dos exercícios novos (enum sem o valor).
 
 ### Passo 2 — liberar a SUA conta para testar/demonstrar (comp)
 Ainda no SQL Editor, trocando o e-mail pelo seu:
