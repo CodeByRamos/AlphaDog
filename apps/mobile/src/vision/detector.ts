@@ -1,4 +1,5 @@
 import type { Detection } from "@alphadog/core";
+import type { TfliteModel } from "react-native-fast-tflite";
 
 /**
  * Contrato do detector de cão.
@@ -36,8 +37,14 @@ export type FrameInput = {
 export type DetectorStatus =
   /** Ainda não carregou. */
   | { kind: "loading" }
-  /** Pronto para processar frames. */
-  | { kind: "ready"; detector: DogDetector }
+  /**
+   * Pronto para processar frames.
+   *
+   * `model` é o handle do TFLite, exposto porque a inferência acontece dentro
+   * do frame processor (worklet) — ele precisa do objeto, não de um método que
+   * cruzaria a ponte a 30 vezes por segundo.
+   */
+  | { kind: "ready"; detector: DogDetector; model: TfliteModel }
   /**
    * Sem modelo disponível. Estado legítimo, não erro: o app roda, mostra os
    * passos do exercício e conta as repetições manualmente. O que ele NÃO faz é

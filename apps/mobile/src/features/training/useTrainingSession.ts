@@ -1,6 +1,6 @@
 import {
   TrainingSession,
-  classifyPosture,
+  classifyPostureLearned,
   type Detection,
   type Exercise,
   type SessionState,
@@ -48,7 +48,10 @@ export function useTrainingSession(exercise: Exercise, hasDetector: boolean) {
    * ele, não com Date.now().
    */
   const pushFrame = useCallback((detection: Detection | null, timestamp: number) => {
-    const reading = classifyPosture(detection);
+    // Classificador aprendido, não a regra escrita à mão: aquela reprovou no
+    // gate com 28,8% de falso positivo contra um teto de 2%. Ver
+    // packages/core/src/posture-learned.ts.
+    const reading = classifyPostureLearned(detection);
     const next = sessionRef.current.update(reading, timestamp);
     setState(next);
     return next;

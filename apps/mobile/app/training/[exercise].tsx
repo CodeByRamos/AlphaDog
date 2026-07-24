@@ -209,6 +209,7 @@ export default function TrainingScreen() {
       state={training.state}
       onFinish={finish}
       onMarkSuccess={training.markSuccess}
+      onFrame={training.pushFrame}
       feedbackText={feedbackText(training.state, dog.name)}
       tone={feedbackTone(training.state.feedback)}
     />

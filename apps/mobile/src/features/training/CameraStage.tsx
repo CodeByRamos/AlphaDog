@@ -1,4 +1,4 @@
-import type { Exercise, SessionState } from "@alphadog/core";
+import type { Detection, Exercise, SessionState } from "@alphadog/core";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useEffect, useRef } from "react";
@@ -17,6 +17,7 @@ import { Camera, useCameraDevice, useCameraPermission } from "react-native-visio
 import { Button } from "../../components/Button";
 import { color, duration, easing, radius, space, type } from "../../theme";
 import type { DetectorStatus } from "../../vision/detector";
+import { usePoseFrameProcessor } from "../../vision/usePoseFrameProcessor";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -37,6 +38,8 @@ type Props = {
   onFinish: (completed: boolean) => void;
   /** O tutor confirmou o acerto. */
   onMarkSuccess: () => void;
+  /** Cada frame processado pelo modelo de visão. */
+  onFrame: (detection: Detection | null, timestampSeconds: number) => void;
   feedbackText: string;
   tone: Tone;
 };
@@ -48,12 +51,14 @@ export function CameraStage({
   state,
   onFinish,
   onMarkSuccess,
+  onFrame,
   feedbackText,
   tone,
 }: Props) {
   const insets = useSafeAreaInsets();
   const { hasPermission, requestPermission } = useCameraPermission();
   const device = useCameraDevice("back");
+  const frameProcessor = usePoseFrameProcessor(detector, onFrame);
 
   useEffect(() => {
     if (!hasPermission) void requestPermission();
@@ -105,9 +110,9 @@ export function CameraStage({
         style={StyleSheet.absoluteFill}
         device={device}
         isActive
-        // O frame processor entra aqui quando o detector existir. Sem modelo,
-        // ligar o processor só gastaria bateria copiando frames para lugar
-        // nenhum.
+        // Sem modelo carregado o processor fica de fora: ligá-lo só gastaria
+        // bateria copiando frames para lugar nenhum.
+        frameProcessor={frameProcessor}
       />
 
       {/* Escurece o topo e a base para o texto ter contraste sobre qualquer cena. */}
