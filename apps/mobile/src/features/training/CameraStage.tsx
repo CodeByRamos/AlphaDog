@@ -60,12 +60,21 @@ export function CameraStage({
   }, [hasPermission, requestPermission]);
 
   // Conclui sozinho quando todas as repetições saem.
+  //
+  // onFinish vive num ref e o efeito depende SÓ da fase. O motivo: a tela
+  // re-renderiza a cada tick de 200ms e o pai recria onFinish em cada render;
+  // se onFinish fosse dependência, o cleanup cancelaria o timeout de 900ms a
+  // cada tick e ele nunca dispararia — a sessão completava 5/5 e ficava parada
+  // até o tutor encerrar na mão. Foi exatamente esse o bug.
+  const onFinishRef = useRef(onFinish);
+  onFinishRef.current = onFinish;
+
   useEffect(() => {
     if (state.phase === "finished") {
-      const t = setTimeout(() => onFinish(true), 900);
+      const t = setTimeout(() => onFinishRef.current(true), 900);
       return () => clearTimeout(t);
     }
-  }, [state.phase, onFinish]);
+  }, [state.phase]);
 
   if (!hasPermission) {
     return (
