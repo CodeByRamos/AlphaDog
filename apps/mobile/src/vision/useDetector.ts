@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { loadTensorflowModel, type TfliteModel } from "react-native-fast-tflite";
 import type { DetectorStatus } from "./detector";
+import { getTfliteRuntime } from "./tflite";
 
 /**
- * Carrega o modelo de pose canina.
+ * Carrega o modelo de pose canina, se este build tiver o runtime nativo.
  *
  * O `dogpose.tflite` foi treinado no Kaggle a partir do StanfordExtra e passou
  * no gate contra 208 fotos rotuladas à mão — mas só depois que o classificador
@@ -11,10 +11,12 @@ import type { DetectorStatus } from "./detector";
  * os keypoints (ver packages/core/src/posture-learned.ts). Com a regra antiga o
  * falso positivo era de 28,8%; com o classificador aprendido, 1,0%.
  *
- * Continua NÃO existindo detector falso. Se o arquivo não estiver no bundle ou
- * o runtime falhar, o status vira `unavailable` e a sessão segue com o tutor
- * marcando o acerto. Um "Excelente!" sem o cão ter sentado ensinaria o tutor a
- * recompensar o comportamento errado — o app passaria a piorar o treino.
+ * Toda falha vira `unavailable`, nunca exceção: um APK gerado antes das
+ * dependências nativas entrarem não pode derrubar a tela de treino. A visão é
+ * melhoria; o treino com o tutor marcando o acerto é o produto.
+ *
+ * Continua NÃO existindo detector falso. Um "Excelente!" sem o cão ter sentado
+ * ensinaria o tutor a recompensar o comportamento errado.
  */
 export function useDetector(): DetectorStatus {
   const [status, setStatus] = useState<DetectorStatus>({ kind: "loading" });
@@ -23,15 +25,23 @@ export function useDetector(): DetectorStatus {
     let alive = true;
 
     (async () => {
+      const runtime = getTfliteRuntime();
+
+      if (!runtime) {
+        setStatus({
+          kind: "unavailable",
+          reason: "Este build do app não inclui o motor de visão.",
+        });
+        return;
+      }
+
       try {
-        // Delegates em ordem de preferência; a lib cai para CPU sozinha quando
-        // o aparelho não tem o acelerador. Lista vazia seria só CPU.
-        const model: TfliteModel = await loadTensorflowModel(
-          // require() é obrigatório aqui: é ele que faz o Metro empacotar o
-          // .tflite como asset nativo e devolver o handle que a lib espera.
-          // import estático não registra o arquivo no bundle.
+        const model = await runtime.loadTensorflowModel(
+          // require() é obrigatório: é ele que faz o Metro empacotar o .tflite
+          // como asset nativo. import estático não registra o arquivo.
           // eslint-disable-next-line @typescript-eslint/no-require-imports
           require("../../assets/models/dogpose.tflite"),
+          // Delegates em ordem de preferência; cai para CPU sozinho.
           ["android-gpu", "core-ml"],
         );
 
@@ -44,8 +54,7 @@ export function useDetector(): DetectorStatus {
             name: "dogpose-yolo11n",
             load: async () => {},
             // A inferência roda no frame processor, em worklet, com acesso
-            // direto ao buffer do frame. Este método existe para o contrato e
-            // não é o caminho quente.
+            // direto ao buffer do frame. Este método existe para o contrato.
             detect: () => null,
             dispose: () => {},
           },
