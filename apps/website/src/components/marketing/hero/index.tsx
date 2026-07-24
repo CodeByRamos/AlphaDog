@@ -66,6 +66,13 @@ export function Hero() {
               {hero.title}
             </h1>
 
+            <p
+              style={rise(225)}
+              className="text-ink-500 order-2 mt-4 max-w-xl text-center text-base leading-relaxed lg:order-3 lg:text-left lg:text-lg"
+            >
+              {hero.subtitle}
+            </p>
+
             <div
               style={rise(270)}
               className="order-5 flex w-full max-w-md flex-col gap-3 sm:flex-row sm:justify-center lg:order-4 lg:mt-8 lg:max-w-none lg:justify-start"
