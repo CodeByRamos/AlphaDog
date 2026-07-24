@@ -126,6 +126,65 @@
   }
 }
 
+/*
+  HUD do hero. A cena de visão computacional dentro do celular.
+  Só opacity e transform (translateY do sweep) — GPU, sem reflow.
+*/
+
+/* Linha de varredura que percorre a caixa do cão de cima a baixo. */
+@keyframes ad-scan {
+  0% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  8%,
+  92% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(300px);
+    opacity: 0;
+  }
+}
+
+/* Pulso dos keypoints — respiro leve, escalonado por delay no elemento. */
+@keyframes ad-keypoint {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.25);
+  }
+}
+
+/* Selo de confirmação do comando: entra depois que a varredura "leu". */
+@keyframes ad-confirm {
+  0%,
+  40% {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+  55%,
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Brilho da moldura que reage à profundidade — respiro lento. */
+@keyframes ad-glow {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.75;
+  }
+}
+
 @layer base {
   html {
     -webkit-tap-highlight-color: transparent;

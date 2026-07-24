@@ -1,12 +1,12 @@
-import Image from "next/image";
-import { AlphaDogMark } from "@/components/brand/logo";
-import { hero } from "@/lib/content/marketing";
+import { HudScene } from "./hud-scene";
 
 /**
  * Mockup do celular.
  *
  * O aparelho é CSS puro (moldura, ilha dinâmica, brilho da borda) — nenhum
- * asset. Só a foto dentro da tela é imagem, e ela vive num slot próprio.
+ * asset. A tela mostra a cena de visão computacional (HudScene): o cão sob
+ * análise de postura, que é o que o produto é. Arte conceitual — a honestidade
+ * sobre "ainda em treinamento" vive na seção da câmera logo abaixo.
  */
 export function PhoneFrame() {
   return (
@@ -17,50 +17,14 @@ export function PhoneFrame() {
         className="pointer-events-none absolute inset-0 rounded-[3rem] bg-gradient-to-br from-white/25 via-transparent to-white/10"
       />
 
-      <div className="bg-sage-700 relative h-full w-full overflow-hidden rounded-[2.4rem]">
-        {/* Slot da foto — trocar por foto real de cães mantém tudo no lugar. */}
-        <Image
-          src="/brand/hero-app-dogs.png"
-          alt="Cães felizes durante uma sessão de treino"
-          fill
-          priority
-          sizes="276px"
-          className="object-cover"
-        />
-
-        {/* Legibilidade do texto sobre a foto. */}
-        <div
-          aria-hidden
-          className="from-ink-950/55 to-ink-950/70 absolute inset-0 bg-gradient-to-b via-transparent"
-        />
-
-        <div className="relative flex h-full flex-col p-5 text-white">
-          <div className="mt-7 flex items-center justify-center gap-2">
-            <AlphaDogMark className="text-alpha-500 size-6" />
-            <span className="font-display text-lg font-extrabold">
-              Alpha<span className="text-alpha-500">Dog</span>
-            </span>
-          </div>
-          <p className="mt-1 text-center text-xs text-white/80">{hero.phone.tagline}</p>
-
-          <div className="mt-auto space-y-2.5">
-            <div className="bg-alpha-500 text-ink-900 rounded-xl py-2.5 text-center text-sm font-bold">
-              {hero.phone.cta}
-            </div>
-            <p className="text-center text-[0.625rem] text-white/70">
-              {hero.phone.footnote}{" "}
-              <span className="text-alpha-400 font-semibold underline">
-                {hero.phone.footnoteLink}
-              </span>
-            </p>
-          </div>
-        </div>
+      <div className="bg-ink-950 relative h-full w-full overflow-hidden rounded-[2.4rem]">
+        <HudScene />
       </div>
 
-      {/* Ilha dinâmica. */}
+      {/* Ilha dinâmica — acima da tela para não ser coberta pela cena. */}
       <div
         aria-hidden
-        className="bg-ink-950 absolute top-[22px] left-1/2 h-[26px] w-[86px] -translate-x-1/2 rounded-full"
+        className="bg-ink-950 absolute top-[22px] left-1/2 z-10 h-[26px] w-[86px] -translate-x-1/2 rounded-full"
       />
     </div>
   );
