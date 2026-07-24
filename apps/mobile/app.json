@@ -17,7 +17,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.alphadog.app",
       "infoPlist": {
-        "NSCameraUsageDescription": "O AlphaDog usa a câmera para acompanhar o treino do seu cão e dar feedback em tempo real. O vídeo é processado no seu aparelho e nunca sai dele.",
+        "NSCameraUsageDescription": "O AlphaDog usa a câmera para acompanhar o treino do seu cão. O vídeo é processado no seu aparelho e nunca sai dele.",
         "NSPhotoLibraryUsageDescription": "Para escolher a foto de perfil do seu cão."
       }
     },
@@ -27,7 +27,10 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0B0E14"
       },
-      "permissions": ["android.permission.CAMERA"]
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "plugins": [
       "expo-router",
@@ -51,7 +54,11 @@
     },
     "extra": {
       "supabaseUrl": "${EXPO_PUBLIC_SUPABASE_URL}",
-      "supabaseAnonKey": "${EXPO_PUBLIC_SUPABASE_ANON_KEY}"
+      "supabaseAnonKey": "${EXPO_PUBLIC_SUPABASE_ANON_KEY}",
+      "router": {},
+      "eas": {
+        "projectId": "18d03321-e6ab-4720-ac4d-41ddd227c3cc"
+      }
     }
   }
 }
