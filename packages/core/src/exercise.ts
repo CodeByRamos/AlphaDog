@@ -56,6 +56,13 @@ export const CATEGORY_ORDER: ExerciseCategory[] = [
 export type ExerciseStep = {
   title: string;
   body: string;
+  /**
+   * Nome de ícone Ionicons, resolvido pelo app. Fica como string para o core
+   * não depender de biblioteca de UI; o app faz o cast. Um ícone por passo dá
+   * âncora visual ao gesto — o tutor treina com o celular apoiado longe e
+   * reconhece o passo pelo desenho antes de ler.
+   */
+  icon?: string;
 };
 
 export type Exercise = {
@@ -113,19 +120,23 @@ export const EXERCISES: Record<ExerciseId, Exercise> = {
     steps: [
       {
         title: "Petisco no focinho",
-        body: "Segure um petisco fechado na mão, encostado no focinho dele. Deixe cheirar, sem soltar.",
+        icon: "restaurant-outline",
+        body: "Prenda um petisco entre os dedos, mão fechada, e encoste no focinho dele. Deixe cheirar e lamber sem soltar — o nariz gruda na sua mão e vira um ímã que você vai guiar. Se ele pular, abaixe a mão e espere as quatro patas no chão antes de continuar.",
       },
       {
         title: "Levante devagar",
-        body: "Mova a mão para cima e um pouco para trás, por cima da cabeça. O nariz sobe, o bumbum desce sozinho.",
+        icon: "arrow-up-outline",
+        body: "Mova a mão lentamente para cima e um pouco para trás, por cima da cabeça, na direção das orelhas. Para seguir o petisco com o nariz, ele levanta a cabeça — e a física faz o resto: cabeça sobe, bumbum desce. Se ele recuar em vez de sentar, você está indo rápido ou alto demais.",
       },
       {
         title: "Marque o instante",
-        body: 'No segundo em que o bumbum tocar o chão, diga "isso!" e entregue o petisco. O tempo é tudo aqui.',
+        icon: "flash-outline",
+        body: 'No exato segundo em que o bumbum tocar o chão, diga "isso!" com voz animada e abra a mão. A recompensa precisa chegar em até 2 segundos — depois disso ele já não sabe pelo que está sendo pago. Não espere ele "terminar de sentar bonito": o toque do bumbum no chão é o momento.',
       },
       {
         title: "Só então nomeie",
-        body: 'Depois de acertar algumas vezes, comece a dizer "senta" logo antes de mover a mão.',
+        icon: "chatbubble-outline",
+        body: 'Depois de 5 a 10 acertos seguidos, comece a dizer "senta" — uma vez só — logo ANTES de mover a mão. A palavra vem antes do gesto, nunca junto. Se ele não sentar, não repita "senta senta senta": volte um passo e faça mais repetições guiadas.',
       },
     ],
   },
@@ -149,19 +160,23 @@ export const EXERCISES: Record<ExerciseId, Exercise> = {
     steps: [
       {
         title: "Comece sentado",
-        body: "O cão precisa estar sentado. Se ainda não sabe sentar, treine isso antes.",
+        icon: "checkmark-circle-outline",
+        body: "Cão sentado, você agachado à frente dele, na altura dos olhos. Se ele ainda não domina o sentar, treine aquilo primeiro. Se levantar no meio do exercício, peça o senta de novo antes de continuar — dar a pata em pé vira pulo.",
       },
       {
         title: "Petisco na mão fechada",
-        body: "Feche o petisco no punho e ofereça na altura do peito dele.",
+        icon: "hand-left-outline",
+        body: "Feche um petisco dentro do punho e ofereça na altura do peito dele, com os dedos para cima. Perto o suficiente para ele alcançar sem sair do lugar.",
       },
       {
         title: "Espere a pata",
-        body: "Ele vai cheirar, lamber, empurrar com o focinho. Não abra. Na hora que a pata encostar na sua mão, abra e entregue.",
+        icon: "time-outline",
+        body: 'Ele vai cheirar, lamber, cutucar com o focinho — ignore tudo. A maioria dos cães tenta a pata em 10 a 30 segundos, quando desiste do focinho. No instante em que a pata ENCOSTAR na sua mão, diga "isso!", abra e entregue. Nunca puxe a pata: pata puxada é desconforto, pata oferecida é escolha.',
       },
       {
         title: "Nomeie o gesto",
-        body: 'Quando ele já oferecer a pata sozinho, comece a dizer "pata" antes de estender a mão.',
+        icon: "chatbubble-outline",
+        body: 'Quando ele oferecer a pata rápido e sem hesitar, diga "pata" logo antes de estender a mão. Depois alterne: peça com a mão aberta e vazia, e recompense com a outra — é o que separa o comando do reflexo de cheirar petisco.',
       },
     ],
   },
@@ -182,19 +197,23 @@ export const EXERCISES: Record<ExerciseId, Exercise> = {
     steps: [
       {
         title: "Comece sentado",
-        body: "Peça para sentar primeiro. Deitar a partir de em pé é bem mais difícil.",
+        icon: "checkmark-circle-outline",
+        body: "Peça o senta primeiro, num lugar calmo e de piso confortável — tapete, grama, colchonete. Deitar a partir de em pé é bem mais difícil, e piso frio ou duro faz ele desistir no meio do movimento.",
       },
       {
         title: "Desça em L",
-        body: "Com o petisco no focinho, leve a mão reto para baixo até o chão, e então puxe para frente, para longe dele.",
+        icon: "arrow-down-outline",
+        body: "Com o petisco preso entre os dedos e o nariz dele grudado na sua mão, desça a mão RETO até o chão, entre as patas dianteiras dele. Espere o focinho acompanhar. Então arraste a mão pelo chão para longe dele, desenhando um L. O nariz desce e depois estica — e os cotovelos vêm ao chão.",
       },
       {
         title: "Deixe seguir",
-        body: "O corpo acompanha o nariz. Quando os cotovelos tocarem o chão, marque e recompense.",
+        icon: "trending-down-outline",
+        body: 'O corpo segue o nariz no ritmo dele; não empurre o dorso para baixo. Se ele levantar o bumbum para alcançar a mão, foi rápido demais — recomece do senta. Quando os DOIS cotovelos tocarem o chão, marque "isso!" e entregue o petisco no chão, entre as patas: comer embaixo mantém ele deitado.',
       },
       {
         title: "Aumente o tempo",
-        body: "Só depois que ele deitar com facilidade, comece a esperar 1, 2, 3 segundos antes de soltar o petisco.",
+        icon: "hourglass-outline",
+        body: "Só depois que ele deitar com facilidade, comece a segurar a entrega: 1 segundo, depois 2, depois 3 — sempre entregando com ele ainda deitado. Se levantar antes, sem bronca: só não vem petisco, e a próxima espera fica um degrau mais curta.",
       },
     ],
   },
@@ -216,19 +235,23 @@ export const EXERCISES: Record<ExerciseId, Exercise> = {
     steps: [
       {
         title: "Mão aberta ao lado do focinho",
-        body: "Mostre a palma da mão a uns 5 cm do nariz dele. A curiosidade faz o cão cheirar — é só o que você precisa.",
+        icon: "hand-right-outline",
+        body: "Estique a palma aberta, dedos para baixo, a uns 5 cm do focinho — vindo de lado, não por cima da cabeça (mão descendo do alto assusta). A curiosidade natural faz o cão esticar o pescoço e investigar. É só o que você precisa.",
       },
       {
         title: "Marque o toque",
-        body: 'No instante em que o focinho encosta na palma, diga "isso!" e recompense com a outra mão.',
+        icon: "flash-outline",
+        body: 'No instante em que o focinho ENCOSTA na palma — não quando só cheira de longe —, diga "isso!" e entregue o petisco com a OUTRA mão. A mão do toque nunca segura comida: ela é o alvo, não a recompensa.',
       },
       {
         title: "Adicione a palavra",
-        body: 'Depois de alguns acertos, diga "toca" logo antes de apresentar a mão.',
+        icon: "chatbubble-outline",
+        body: 'Depois de 5 acertos seguidos, diga "toca" — uma vez, voz neutra — logo antes de apresentar a mão. A palavra vira o gatilho; a mão vira a confirmação.',
       },
       {
         title: "Varie a posição",
-        body: "Ofereça a mão mais alto, mais baixo, para o lado. O cão aprende a te seguir — é isso que torna o comando útil.",
+        icon: "move-outline",
+        body: "Apresente a mão mais alta, mais baixa, à esquerda, à direita, um passo para trás. Cada variação que ele acerta torna o comando mais sólido — e é o que permite usá-lo depois para reposicionar o cão em qualquer situação, sem encostar na guia.",
       },
     ],
   },
@@ -251,19 +274,23 @@ export const EXERCISES: Record<ExerciseId, Exercise> = {
     steps: [
       {
         title: "Peça para sentar",
-        body: "Comece com o cão sentado e você bem à frente dele.",
+        icon: "checkmark-circle-outline",
+        body: "Com o cão sentado, fique de pé BEM à frente dele, quase encostando. Distância vem muito depois — o primeiro adversário é o tempo, não o espaço.",
       },
       {
         title: "Espere um segundo, marque",
-        body: 'Conte "um" na cabeça, e se ele não levantou, diga "isso!" e recompense ainda sentado. Recompensar na posição é o que ensina a ficar.',
+        icon: "time-outline",
+        body: 'Conte "um" em silêncio. Se ele não levantou, diga "isso!" e entregue o petisco NA POSIÇÃO, com ele ainda sentado — nunca o chame para vir buscar. Recompensar no lugar é exatamente o que ensina que ficar parado paga.',
       },
       {
         title: "Some tempo devagar",
-        body: "Vá para 2, 3, 5 segundos. Se ele levantar, você subiu rápido demais: volte um degrau.",
+        icon: "hourglass-outline",
+        body: "Suba para 2, 3, 5 segundos, um degrau por vez — e varie (às vezes 2, às vezes 4) para ele não prever o fim. Se levantar, sem bronca: você subiu rápido demais. Volte para um tempo em que ele acerta e fique ali mais algumas repetições.",
       },
       {
         title: "Crie a liberação",
-        body: 'Escolha uma palavra de solta — "pode" — e diga sempre que a espera acabar. Ele aprende que só sai quando ouve isso.',
+        icon: "flag-outline",
+        body: 'Escolha uma palavra de solta — "pode" — e diga TODA vez que a espera acabar, antes de ele se mexer. Com o tempo ele aprende que só a palavra encerra o exercício — e é isso que segura o cão diante da porta aberta.',
       },
     ],
   },
@@ -285,19 +312,23 @@ export const EXERCISES: Record<ExerciseId, Exercise> = {
     steps: [
       {
         title: "Comece pertinho",
-        body: "Com o cão a um metro, diga o nome dele + \"vem\" numa voz animada, e abra os braços.",
+        icon: "walk-outline",
+        body: 'A um metro de distância, agache, diga o nome dele + "vem" UMA vez, com voz alta e alegre, e abra os braços. Se ele não vier, não repita o comando — faça um som de beijo ou bata palma. "Vem" repetido dez vezes vira ruído de fundo.',
       },
       {
         title: "Pague grande",
-        body: "Quando ele chegar, festa: petisco bom, voz feliz, carinho. Vir até você tem que ser a melhor coisa do dia.",
+        icon: "gift-outline",
+        body: "Quando ele chegar, faça a festa do ano: petisco especial (não a ração de sempre), voz aguda, carinho no peito. Vir até você precisa ser A melhor coisa que acontece no dia dele — é contra isso que o cheiro do poste vai competir amanhã.",
       },
       {
         title: "Aumente a distância",
-        body: "Vá afastando. Peça ajuda de alguém para segurar e soltar o cão, ou chame de outro cômodo.",
+        icon: "resize-outline",
+        body: "Vá para 3 metros, depois outro cômodo. Peça a alguém para segurar o cão enquanto você se afasta e chama. Sempre UMA chamada + festa na chegada. Segure de leve o peitoral por 1 segundo antes de entregar o petisco: cão que chega e já sai correndo não terminou de vir.",
       },
       {
         title: "Adicione distração só no fim",
-        body: "Só quando ele vier fácil, treine com um brinquedo no chão por perto. Se ele ignorar você, a distração está forte demais ainda.",
+        icon: "alert-circle-outline",
+        body: 'Só quando ele vier voando dentro de casa, treine com UM brinquedo parado no chão, longe do caminho. Se ele ignorar você, a distração está forte demais: afaste-a ou melhore o petisco. E NUNCA chame "vem" para banho, bronca ou fim do passeio — isso desfaz semanas de treino num dia.',
       },
     ],
   },
@@ -319,19 +350,23 @@ export const EXERCISES: Record<ExerciseId, Exercise> = {
     steps: [
       {
         title: "Comece parado, cão ao lado",
-        body: "Com o cão do seu lado esquerdo e sentado, dê um passo. Se ele acompanhar sem esticar, marque e recompense na altura da sua perna.",
+        icon: "body-outline",
+        body: 'Cão sentado junto à sua perna esquerda, guia frouxa na mão direita cruzando o corpo, petiscos na esquerda. Dê UM passo e pare. Ele acompanhou sem esticar? "Isso!" e petisco na altura da costura da calça.',
       },
       {
         title: "Recompense a posição certa",
-        body: "Petisco sempre entregue junto à sua perna, nunca à frente. Você está ensinando onde é bom estar.",
+        icon: "location-outline",
+        body: "O petisco aparece SEMPRE colado à sua perna esquerda, nunca à frente do seu corpo. Onde a comida aparece é onde o cão aprende a estar — petisco entregue à frente ensina o cão a andar na sua frente, que é o problema que você veio resolver.",
       },
       {
         title: "Pare quando esticar",
-        body: "Guia tensionou? Pare. Espere o cão afrouxar (olhar para você, dar um passo atrás). Só então recomece.",
+        icon: "hand-left-outline",
+        body: "No instante em que a guia tensionar, pare e vire uma estátua: sem puxão, sem “não”, sem arrastar. Espere ele olhar para trás ou dar um passo de volta, afrouxando a guia — e só então retome. Andar é a recompensa; guia esticada desliga o passeio.",
       },
       {
         title: "Some passos",
-        body: "Dois passos sem esticar, marque. Depois três, cinco, dez. A conta sobe pela guia frouxa, não pela distância.",
+        icon: "footsteps-outline",
+        body: "Dois passos sem esticar → marque. Depois quatro, seis, dez. Conte passos de guia frouxa, não metros. A partir de dez, varie o ritmo e faça curvas: cão que acompanha curva está andando COM você, não apenas na sua direção.",
       },
     ],
   },
@@ -353,19 +388,23 @@ export const EXERCISES: Record<ExerciseId, Exercise> = {
     steps: [
       {
         title: "Petisco à altura dos seus olhos",
-        body: "Leve um petisco do focinho dele até perto do seu olho. O olhar sobe junto.",
+        icon: "eye-outline",
+        body: "Sente-se à frente dele, deixe cheirar um petisco e leve a mão devagar do focinho dele até o canto do SEU olho. O olhar dele sobe seguindo a mão — e encontra o seu.",
       },
       {
         title: "Marque o olhar",
-        body: 'No segundo em que os olhos encontram os seus, diga "isso!" e entregue.',
+        icon: "flash-outline",
+        body: 'No instante em que os olhos dele encontram os seus — mesmo que por meio segundo — diga "isso!" e entregue. Contato curtíssimo no começo é normal: olhar fixo é desconfortável para cães por natureza, e você está pagando exatamente a coragem de sustentar.',
       },
       {
         title: "Tire a isca",
-        body: 'Comece a dizer "olha" sem levar o petisco ao rosto. Recompense quando ele te olhar mesmo assim.',
+        icon: "remove-circle-outline",
+        body: 'Agora diga "olha" SEM levar a mão ao rosto, e espere. Ele vai encarar sua mão primeiro (onde sempre teve comida) — ignore. Quando desistir da mão e subir o olhar para o seu rosto, marque na hora.',
       },
       {
         title: "Segure o olhar",
-        body: "Espere 1, depois 2 segundos de olho no olho antes de marcar. É a duração que vira foco de verdade.",
+        icon: "hourglass-outline",
+        body: "Espere 1 segundo de olho no olho antes de marcar, depois 2 — contando devagar. Depois leve para onde a vida acontece: quintal, varanda, calçada calma. Um cão que sustenta o olhar com o mundo passando é um cão que escolheu você. É a fundação de todos os outros comandos.",
       },
     ],
   },
@@ -387,19 +426,23 @@ export const EXERCISES: Record<ExerciseId, Exercise> = {
     steps: [
       {
         title: "Petisco no punho fechado",
-        body: "Feche um petisco na mão e ofereça. O cão vai cheirar, lamber, cutucar. Não abra.",
+        icon: "hand-left-outline",
+        body: "Feche um petisco comum dentro do punho e ofereça. Ele vai cheirar, lamber, cutucar, talvez roer de leve — aguente firme: punho fechado, braço parado, nenhuma palavra ainda.",
       },
       {
         title: "Espere ele desistir",
-        body: 'No instante em que ele para de insistir e recua, diga "isso!" e pague com um petisco MELHOR da outra mão.',
+        icon: "time-outline",
+        body: 'Em algum momento ele recua, senta ou desvia o olhar — esse é o instante. "Isso!" e pague com um petisco MELHOR, vindo da outra mão. O do punho nunca é entregue: quem desiste do proibido ganha algo melhor que o proibido.',
       },
       {
         title: "Adicione a palavra",
-        body: 'Quando ele já recuar rápido, diga "deixa" logo antes de mostrar o punho.',
+        icon: "chatbubble-outline",
+        body: 'Quando ele recuar em 1–2 segundos, diga "deixa" logo antes de apresentar o punho. A palavra entra quando o comportamento já existe — nomear cedo demais é dar nome à bagunça.',
       },
       {
         title: "Leve para o chão",
-        body: "Coloque o petisco no chão coberto pela mão. Descubra aos poucos. Se ele avançar, cubra de novo. Marque quando ele recuar.",
+        icon: "arrow-down-outline",
+        body: 'Petisco no chão, sua mão em concha por cima. Ele investiga; quando recuar, marque e pague da outra mão. Aos poucos, descubra o petisco, com a mão pairando por perto. Se ele avançar, só cubra de novo — sem bronca. A meta final: petisco descoberto no chão, você diz "deixa", e ele olha para VOCÊ.',
       },
     ],
   },
@@ -421,19 +464,23 @@ export const EXERCISES: Record<ExerciseId, Exercise> = {
     steps: [
       {
         title: "Peça para sentar",
-        body: "Com a tigela na mão, peça para o cão sentar antes de qualquer coisa.",
+        icon: "checkmark-circle-outline",
+        body: 'Prepare a tigela normalmente — ele já vai estar girando de ansiedade, e é normal. Segure a tigela na altura da cintura e peça "senta" UMA vez. Espere o quanto precisar: a refeição é a maior recompensa do dia dele, e ela só anda quando o bumbum encosta no chão.',
       },
       {
         title: "Desça devagar",
-        body: "Leve a tigela ao chão bem devagar. Levantou? Suba a tigela e recomece. Ficou sentado? Continue descendo.",
+        icon: "arrow-down-outline",
+        body: "Comece a descer a tigela lentamente. É um teste vivo: bumbum saiu do chão → a tigela volta para a cintura, sem uma palavra. Sentou de novo → a tigela volta a descer. Nos primeiros dias isso repete 5, 10 vezes — persista, cada subida de tigela ensina mais que qualquer bronca.",
       },
       {
         title: "Tigela no chão, cão sentado",
-        body: "Consiga pousar a tigela com ele ainda sentado. Segure a espera por 1, 2, 3 segundos.",
+        icon: "restaurant-outline",
+        body: "Pouse a tigela no chão com ele ainda sentado — mão pronta para levantá-la se ele avançar; o timing é tudo. Conseguiu pousar? Segure 1 segundo de espera. Amanhã 2, depois 3.",
       },
       {
         title: "Libere",
-        body: 'Diga "pode" e deixe ele comer. A palavra de liberação é o que separa esperar de ser proibido.',
+        icon: "flag-outline",
+        body: 'Diga "pode" com voz clara e deixe comer em paz. SEMPRE a mesma palavra, sempre ANTES de ele se mexer. Em uma semana o ritual fica automático — e você ganhou dois treinos de autocontrole por dia, de graça, pelo resto da vida dele.',
       },
     ],
   },
@@ -455,19 +502,23 @@ export const EXERCISES: Record<ExerciseId, Exercise> = {
     steps: [
       {
         title: "Mostre e esconda fácil",
-        body: 'Deixe o cão ver você largar um petisco a um metro. Diga "procura" e deixe ele ir buscar.',
+        icon: "eye-outline",
+        body: 'Com ele olhando, jogue um petisco a um metro, diga "procura" e solte. Fácil de propósito: a primeira sessão existe só para ligar a palavra à ação de buscar com o nariz.',
       },
       {
         title: "Esconda de leve",
-        body: "Agora esconda atrás de um pé de mesa, sob a borda do tapete. Perto e fácil ainda.",
+        icon: "search-outline",
+        body: 'Peça o fica (ou segure de leve pelo peitoral), esconda o petisco atrás de um pé de mesa ainda meio à vista, e solte com "procura". Se ele for na direção errada, NÃO aponte — espere. O nariz encontra; é exatamente isso que está sendo treinado.',
       },
       {
         title: "Espalhe pelo cômodo",
-        body: "Com o cão em outro cômodo, esconda 5 petiscos. Solte e diga \"procura\". Deixe o nariz trabalhar.",
+        icon: "home-outline",
+        body: 'Deixe-o em outro cômodo, esconda 5 petiscos em alturas baixas — atrás do sofá, sob a borda do tapete, num canto —, traga-o e diga "procura" uma vez. Deixe trabalhar em silêncio: cada farejada é esforço mental de verdade. Dez minutos disso cansam mais que uma hora de rua.',
       },
       {
         title: "Suba a dificuldade",
-        body: "Esconda mais alto, dentro de caixas, embrulhado em pano. Cada nível novo é um cérebro cansado no fim.",
+        icon: "trending-up-outline",
+        body: "Petisco dentro de caixa de papelão aberta, embrulhado num pano, em cima de um degrau. Um esconderijo novo por sessão, não todos de uma vez. Se ele desistir, facilite um nível: terminar com vitória é o que faz ele topar procurar amanhã.",
       },
     ],
   },

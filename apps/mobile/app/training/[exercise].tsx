@@ -89,7 +89,23 @@ export default function TrainingScreen() {
                     <Text style={styles.stepNumText}>{i + 1}</Text>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={[type.subheading, { color: color.bone }]}>{step.title}</Text>
+                    <View style={styles.stepTitleRow}>
+                      <Text
+                        style={[type.subheading, { color: color.bone, flex: 1 }]}
+                      >
+                        {step.title}
+                      </Text>
+                      {step.icon ? (
+                        <Ionicons
+                          // O core guarda o nome como string para não depender
+                          // de biblioteca de UI; o cast fecha o tipo aqui.
+                          name={step.icon as keyof typeof Ionicons.glyphMap}
+                          size={18}
+                          color={color.alpha400}
+                          style={styles.stepIcon}
+                        />
+                      ) : null}
+                    </View>
                     <Text style={[type.bodySmall, { color: color.ink400, marginTop: 2 }]}>
                       {step.body}
                     </Text>
@@ -222,6 +238,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   stepNumText: { fontFamily: "Sora_800ExtraBold", fontSize: 13, color: color.ink900 },
+  stepTitleRow: { flexDirection: "row", alignItems: "center", gap: space.sm },
+  stepIcon: { marginTop: 1 },
   tip: { flexDirection: "row", gap: space.md, backgroundColor: "rgba(240,167,60,0.08)", borderColor: color.alpha600 },
   completion: { flexDirection: "row", gap: space.md, backgroundColor: "rgba(62,142,126,0.08)", borderColor: color.sage600 },
   metaRow: { flexDirection: "row", gap: space.sm, marginTop: space.md },
