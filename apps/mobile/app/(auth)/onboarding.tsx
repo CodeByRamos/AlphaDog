@@ -163,8 +163,11 @@ export default function OnboardingScreen() {
           </Animated.View>
         </ScrollView>
 
-        {/* Escolha única avança sozinha, então o botão só aparece onde faz falta. */}
-        {step.kind !== "choice" ? (
+        {/* Escolha única avança sozinha, então o botão só aparece onde faz falta
+            — MENOS no último passo: lá o toque não tem para onde avançar, então
+            é o botão "Criar perfil" que dispara o save. Sem esta exceção, a
+            última pergunta (objetivo, que é escolha) trava sem nada acontecer. */}
+        {step.kind !== "choice" || isLast ? (
           <Animated.View entering={FadeIn} style={styles.footer}>
             {save.isError ? (
               <Text style={[type.bodySmall, styles.error]} accessibilityRole="alert">
