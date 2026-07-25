@@ -1,7 +1,7 @@
 import type { Detection, Exercise, SessionState } from "@alphadog/core";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, {
   FadeIn,
@@ -18,6 +18,8 @@ import { Button } from "../../components/Button";
 import { color, duration, easing, radius, space, type } from "../../theme";
 import type { DetectorStatus } from "../../vision/detector";
 import { usePoseFrameProcessor } from "../../vision/usePoseFrameProcessor";
+import { ScanOverlay } from "./ScanOverlay";
+import { useScanPhase } from "./useScanPhase";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -58,7 +60,21 @@ export function CameraStage({
   const insets = useSafeAreaInsets();
   const { hasPermission, requestPermission } = useCameraPermission();
   const device = useCameraDevice("back");
-  const frameProcessor = usePoseFrameProcessor(detector, onFrame);
+
+  const scan = useScanPhase(detector.kind === "ready");
+
+  // Cada frame alimenta o scan e, depois que o alvo está travado, a sessão. A
+  // sessão não recebe frame durante a identificação de propósito: o cronômetro
+  // de permanência começaria a contar antes de o tutor estar pronto.
+  const handleFrame = useCallback(
+    (detection: Detection | null, timestamp: number) => {
+      scan.observe(detection);
+      if (scan.ready) onFrame(detection, timestamp);
+    },
+    [scan, onFrame],
+  );
+
+  const frameProcessor = usePoseFrameProcessor(detector, handleFrame);
 
   useEffect(() => {
     if (!hasPermission) void requestPermission();
@@ -131,40 +147,64 @@ export function CameraStage({
             <Ionicons name="close" size={22} color={color.white} />
           </Pressable>
 
-          <View style={styles.repPill}>
-            <Text style={styles.repText}>
-              {state.currentRep} / {state.totalReps}
-            </Text>
-          </View>
+          {/* Contadores só fazem sentido depois que o treino começou. */}
+          {scan.ready ? (
+            <>
+              <View style={styles.repPill}>
+                <Text style={styles.repText}>
+                  {state.currentRep} / {state.totalReps}
+                </Text>
+              </View>
 
-          <View style={styles.successPill}>
-            <Ionicons name="checkmark-circle" size={14} color={color.sage400} />
-            <Text style={styles.successText}>{state.successCount}</Text>
-          </View>
+              <View style={styles.successPill}>
+                <Ionicons name="checkmark-circle" size={14} color={color.sage400} />
+                <Text style={styles.successText}>{state.successCount}</Text>
+              </View>
+            </>
+          ) : (
+            <View style={styles.repPill}>
+              <Text style={styles.repText}>{exercise.name}</Text>
+            </View>
+          )}
         </View>
       </View>
 
-      {detector.kind === "ready" ? (
-        <FeedbackBanner text={feedbackText} tone={tone} state={state} />
-      ) : (
-        <ModelUnavailable exercise={exercise} />
-      )}
-
-      <View style={[styles.scrim, styles.scrimBottom, { paddingBottom: insets.bottom + space.lg }]}>
-        <MarkSuccessButton
-          disabled={state.phase === "rewarding" || state.phase === "finished"}
-          rewarding={state.phase === "rewarding"}
-          onPress={onMarkSuccess}
+      {/* Identificação do cão. Enquanto ela não termina, o treino não começa —
+          é o que dá sentido ao "a IA travou o alvo". Sem motor de visão o scan
+          se resolve na hora, para não trancar o tutor fora do próprio treino. */}
+      {!scan.ready ? (
+        <ScanOverlay
+          detection={scan.detection}
+          locked={scan.phase === "locked"}
+          debug={__DEV__}
         />
-        <Pressable
-          onPress={() => onFinish(false)}
-          accessibilityRole="button"
-          style={styles.endBtn}
-          hitSlop={8}
-        >
-          <Text style={[type.label, { color: color.ink300 }]}>Encerrar sessão</Text>
-        </Pressable>
-      </View>
+      ) : (
+        <>
+          {detector.kind === "ready" ? (
+            <FeedbackBanner text={feedbackText} tone={tone} state={state} />
+          ) : (
+            <ModelUnavailable exercise={exercise} />
+          )}
+
+          <View
+            style={[styles.scrim, styles.scrimBottom, { paddingBottom: insets.bottom + space.lg }]}
+          >
+            <MarkSuccessButton
+              disabled={state.phase === "rewarding" || state.phase === "finished"}
+              rewarding={state.phase === "rewarding"}
+              onPress={onMarkSuccess}
+            />
+            <Pressable
+              onPress={() => onFinish(false)}
+              accessibilityRole="button"
+              style={styles.endBtn}
+              hitSlop={8}
+            >
+              <Text style={[type.label, { color: color.ink300 }]}>Encerrar sessão</Text>
+            </Pressable>
+          </View>
+        </>
+      )}
     </View>
   );
 }
