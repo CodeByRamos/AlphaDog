@@ -1,6 +1,20 @@
 import { useEffect, useState } from "react";
+import { Platform } from "react-native";
 import type { DetectorStatus } from "./detector";
 import { getTfliteRuntime } from "./tflite";
+
+/**
+ * Acelerador por plataforma.
+ *
+ * Passar `android-gpu` no iPhone (ou `core-ml` no Android) faz o runtime tentar
+ * um delegate que não existe naquele sistema. Cada plataforma recebe só o que
+ * ela tem; sem delegate disponível, a lib usa a CPU sozinha.
+ */
+const DELEGATES = Platform.select({
+  ios: ["core-ml"],
+  android: ["android-gpu"],
+  default: [] as string[],
+});
 
 /**
  * Carrega o modelo de pose canina, se este build tiver o runtime nativo.
@@ -41,8 +55,7 @@ export function useDetector(): DetectorStatus {
           // como asset nativo. import estático não registra o arquivo.
           // eslint-disable-next-line @typescript-eslint/no-require-imports
           require("../../assets/models/dogpose.tflite"),
-          // Delegates em ordem de preferência; cai para CPU sozinho.
-          ["android-gpu", "core-ml"],
+          DELEGATES,
         );
 
         if (!alive) return;

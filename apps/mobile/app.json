@@ -16,21 +16,30 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.alphadog.app",
+      "buildNumber": "1",
       "infoPlist": {
-        "NSCameraUsageDescription": "O AlphaDog usa a câmera para acompanhar o treino do seu cão. O vídeo é processado no seu aparelho e nunca sai dele.",
-        "NSPhotoLibraryUsageDescription": "Para escolher a foto de perfil do seu cão."
+        "NSCameraUsageDescription": "O AlphaDog usa a câmera para acompanhar o treino do seu cão e reconhecer a postura dele. O vídeo é processado no próprio aparelho e nunca é enviado, gravado ou compartilhado.",
+        "NSPhotoLibraryUsageDescription": "Para você escolher uma foto de perfil do seu cão a partir das suas fotos.",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "privacyManifests": {
+        "NSPrivacyAccessedAPITypes": [
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+            "NSPrivacyAccessedAPITypeReasons": ["CA92.1"]
+          }
+        ]
       }
     },
     "android": {
       "package": "com.alphadog.app",
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0B0E14"
       },
-      "permissions": [
-        "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO"
-      ]
+      "permissions": ["android.permission.CAMERA"],
+      "blockedPermissions": ["android.permission.RECORD_AUDIO"]
     },
     "plugins": [
       "expo-router",

@@ -14,6 +14,9 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "ios": {
+        "simulator": false
       }
     },
     "preview": {
@@ -25,10 +28,21 @@
     },
     "production": {
       "extends": "base",
-      "autoIncrement": true
+      "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "ios": {
+        "image": "latest"
+      }
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "ascAppId": "PREENCHER_APP_STORE_CONNECT_APP_ID",
+        "appleTeamId": "PREENCHER_APPLE_TEAM_ID"
+      }
+    }
   }
 }
