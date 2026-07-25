@@ -39,7 +39,19 @@ const resizeModule: { useResizePlugin?: () => { resize: unknown } } | null = (()
 
 export function usePoseFrameProcessor(
   detector: DetectorStatus,
-  onDetection: (detection: Detection | null, timestampSeconds: number) => void,
+  /**
+   * `frameWidth`/`frameHeight` acompanham a detecção porque a caixa vem em
+   * pixels do frame, e a UI precisa convertê-la para a tela. Normalizar aqui
+   * seria tentador e errado: dividir x por largura e y por altura distorce a
+   * razão de aspecto — que é justamente a característica mais pesada do
+   * classificador de postura.
+   */
+  onDetection: (
+    detection: Detection | null,
+    timestampSeconds: number,
+    frameWidth: number,
+    frameHeight: number,
+  ) => void,
 ) {
   // Chamada condicional só na aparência: `resizeModule` é constante do módulo,
   // então o mesmo caminho roda em todos os renders.
@@ -77,7 +89,7 @@ export function usePoseFrameProcessor(
 
         // Desfaz o encaixe no quadrado para as coordenadas voltarem ao frame.
         const detection = decodeYoloPose(raw, letterboxFor(frame.width, frame.height));
-        emit(detection, frame.timestamp / 1e9);
+        emit(detection, frame.timestamp / 1e9, frame.width, frame.height);
       } catch {
         // Frame ruim não derruba a sessão. Perder uma leitura custa uma
         // repetição; travar a câmera custa o treino inteiro.

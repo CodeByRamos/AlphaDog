@@ -18,6 +18,7 @@ import { Button } from "../../components/Button";
 import { color, duration, easing, radius, space, type } from "../../theme";
 import type { DetectorStatus } from "../../vision/detector";
 import { usePoseFrameProcessor } from "../../vision/usePoseFrameProcessor";
+import { DogOutline } from "./DogOutline";
 import { ScanOverlay } from "./ScanOverlay";
 import { useScanPhase } from "./useScanPhase";
 
@@ -62,12 +63,16 @@ export function CameraStage({
   const device = useCameraDevice("back");
 
   const scan = useScanPhase(detector.kind === "ready");
+  // Dimensões do frame, para o contorno cair sobre o cão na tela. Num ref: muda
+  // uma vez por sessão e não deve provocar render a cada quadro.
+  const frameSize = useRef({ width: 0, height: 0 });
 
   // Cada frame alimenta o scan e, depois que o alvo está travado, a sessão. A
   // sessão não recebe frame durante a identificação de propósito: o cronômetro
   // de permanência começaria a contar antes de o tutor estar pronto.
   const handleFrame = useCallback(
-    (detection: Detection | null, timestamp: number) => {
+    (detection: Detection | null, timestamp: number, fw: number, fh: number) => {
+      frameSize.current = { width: fw, height: fh };
       scan.observe(detection);
       if (scan.ready) onFrame(detection, timestamp);
     },
@@ -130,6 +135,18 @@ export function CameraStage({
         // bateria copiando frames para lugar nenhum.
         frameProcessor={frameProcessor}
       />
+
+      {/* Contorno sobre o cão real. Fica visível também durante o treino: é a
+          prova contínua, para o tutor, de que a IA continua acompanhando. */}
+      {detector.kind === "ready" && (
+        <DogOutline
+          detection={scan.detection}
+          frameWidth={frameSize.current.width}
+          frameHeight={frameSize.current.height}
+          locked={scan.ready}
+          showKeypoints={__DEV__}
+        />
+      )}
 
       {/* Escurece o topo e a base para o texto ter contraste sobre qualquer cena. */}
       <View style={[styles.scrim, styles.scrimTop, { paddingTop: insets.top + space.md }]}>

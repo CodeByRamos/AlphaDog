@@ -1,4 +1,8 @@
-import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold } from "@expo-google-fonts/inter";
+import {
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+} from "@expo-google-fonts/inter";
 import { Sora_700Bold, Sora_800ExtraBold } from "@expo-google-fonts/sora";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useFonts } from "expo-font";
@@ -8,6 +12,7 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { ErrorBoundary } from "../src/components/ErrorBoundary";
 import { AuthProvider } from "../src/state/auth";
 import { color } from "../src/theme";
 
@@ -46,33 +51,37 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <QueryClientProvider client={queryClient}>
-          <AuthProvider>
-            <StatusBar style="light" />
-            <Stack
-              screenOptions={{
-                headerShown: false,
-                contentStyle: { backgroundColor: color.ink900 },
-                animation: "slide_from_right",
-              }}
-            >
-              <Stack.Screen name="index" />
-              <Stack.Screen name="(auth)" />
-              <Stack.Screen name="subscribe" />
-              <Stack.Screen name="(app)" />
-              <Stack.Screen
-                name="training/[exercise]"
-                options={{
-                  // Treino é imersivo: entra de baixo, como um modal, e sai do
-                  // fluxo de navegação normal.
-                  presentation: "fullScreenModal",
-                  animation: "slide_from_bottom",
-                  gestureEnabled: false,
+        {/* Fora dos providers: se a própria inicialização do Supabase ou do
+            React Query falhar, ainda existe uma tela para mostrar o erro. */}
+        <ErrorBoundary label="root">
+          <QueryClientProvider client={queryClient}>
+            <AuthProvider>
+              <StatusBar style="light" />
+              <Stack
+                screenOptions={{
+                  headerShown: false,
+                  contentStyle: { backgroundColor: color.ink900 },
+                  animation: "slide_from_right",
                 }}
-              />
-            </Stack>
-          </AuthProvider>
-        </QueryClientProvider>
+              >
+                <Stack.Screen name="index" />
+                <Stack.Screen name="(auth)" />
+                <Stack.Screen name="subscribe" />
+                <Stack.Screen name="(app)" />
+                <Stack.Screen
+                  name="training/[exercise]"
+                  options={{
+                    // Treino é imersivo: entra de baixo, como um modal, e sai do
+                    // fluxo de navegação normal.
+                    presentation: "fullScreenModal",
+                    animation: "slide_from_bottom",
+                    gestureEnabled: false,
+                  }}
+                />
+              </Stack>
+            </AuthProvider>
+          </QueryClientProvider>
+        </ErrorBoundary>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
