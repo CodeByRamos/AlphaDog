@@ -64,3 +64,7 @@ services/ai/runs/
 
 # rotulos de postura: pequenos e trabalho manual, versionar apesar de data/ ser ignorado
 !services/ai/data/posture_labels.json
+
+# export web do app mobile (artefato de build)
+apps/mobile/dist-web/
+apps/mobile/dist/

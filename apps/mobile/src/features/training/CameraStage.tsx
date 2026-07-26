@@ -2,7 +2,7 @@ import type { Detection, Exercise, SessionState } from "@alphadog/core";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useCallback, useEffect, useRef } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, {
   FadeIn,
   useAnimatedStyle,
@@ -101,6 +101,58 @@ export function CameraStage({
       return () => clearTimeout(t);
     }
   }, [state.phase]);
+
+  // No navegador não há Vision Camera: o componente é nativo. A sessão roda
+  // igual, sem o vídeo de fundo — é o modo de prévia para os sócios testarem o
+  // fluxo inteiro sem instalar nada. O treino em si nunca dependeu da imagem.
+  if (Platform.OS === "web") {
+    return (
+      <View style={[styles.root, styles.webRoot]}>
+        <View style={[styles.scrim, styles.scrimTop, { paddingTop: insets.top + space.md }]}>
+          <View style={styles.topBar}>
+            <Pressable
+              onPress={() => onFinish(false)}
+              hitSlop={16}
+              accessibilityRole="button"
+              accessibilityLabel="Encerrar treino"
+              style={styles.closeBtn}
+            >
+              <Ionicons name="close" size={22} color={color.white} />
+            </Pressable>
+            <View style={styles.repPill}>
+              <Text style={styles.repText}>
+                {state.currentRep} / {state.totalReps}
+              </Text>
+            </View>
+            <View style={styles.successPill}>
+              <Ionicons name="checkmark-circle" size={14} color={color.sage400} />
+              <Text style={styles.successText}>{state.successCount}</Text>
+            </View>
+          </View>
+        </View>
+
+        <ModelUnavailable exercise={exercise} />
+
+        <View
+          style={[styles.scrim, styles.scrimBottom, { paddingBottom: insets.bottom + space.lg }]}
+        >
+          <MarkSuccessButton
+            disabled={state.phase === "rewarding" || state.phase === "finished"}
+            rewarding={state.phase === "rewarding"}
+            onPress={onMarkSuccess}
+          />
+          <Pressable
+            onPress={() => onFinish(false)}
+            accessibilityRole="button"
+            style={styles.endBtn}
+            hitSlop={8}
+          >
+            <Text style={[type.label, { color: color.ink300 }]}>Encerrar sessão</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
 
   if (!hasPermission) {
     return (
@@ -401,6 +453,8 @@ function Blocked({
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.ink950 },
+  // Sem vídeo de fundo, a tela precisa distribuir o conteúdo sozinha.
+  webRoot: { justifyContent: "space-between" },
   scrim: { position: "absolute", left: 0, right: 0, paddingHorizontal: space.lg },
   scrimTop: { top: 0, paddingBottom: space.lg, backgroundColor: "rgba(5,7,11,0.55)" },
   scrimBottom: {

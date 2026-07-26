@@ -6,6 +6,19 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 3000
+    },
+    {
+      "name": "alphadog-app-web",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "--yes",
+        "serve",
+        "-s",
+        "apps/mobile/dist-web",
+        "-l",
+        "4173"
+      ],
+      "port": 4173
     }
   ]
 }

@@ -1,69 +1,56 @@
-import {
-  DEFAULT_PLAN_ID,
-  formatBRL,
-  PLANS,
-  pricePerDayCents,
-  type PlanId,
-} from "@alphadog/core";
+import { formatBRL, PLANS, pricePerDayCents } from "@alphadog/core";
 import { Ionicons } from "@expo/vector-icons";
-import { useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useQueryClient } from "@tanstack/react-query";
+import * as Linking from "expo-linking";
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Button } from "../src/components/Button";
 import { Logo } from "../src/components/Logo";
 import { Screen, screenPadding } from "../src/components/Screen";
 import { useAuth } from "../src/state/auth";
 import { color, radius, space, type } from "../src/theme";
 
-/** O que a assinatura inclui. `soon` marca o que ainda está em desenvolvimento. */
+/**
+ * Tela de acesso — o paywall do app.
+ *
+ * A assinatura é contratada NO SITE, nunca aqui. O app apenas reconhece o
+ * acesso que já existe na conta. Isso é decisão de arquitetura e de conformidade
+ * ao mesmo tempo:
+ *
+ * - A Apple exige In-App Purchase para venda de conteúdo digital dentro do app
+ *   (Guideline 3.1.1), com 15–30% de comissão. Vender por PIX ou cartão próprio
+ *   dentro do app iOS é rejeição garantida.
+ * - A Guideline 3.1.3(b) (serviços multiplataforma) PERMITE que o app dê acesso
+ *   a conteúdo adquirido em outra plataforma. O que ela proíbe é DIRECIONAR o
+ *   usuário para comprar fora: nada de link, botão, preço ou instrução.
+ *
+ * Por isso a tela muda de forma por plataforma, e não por gosto:
+ *   iOS     — só informa que a conta não tem acesso ativo. Sem preço, sem link,
+ *             sem "assine no site". Qualquer uma dessas coisas é motivo de
+ *             rejeição.
+ *   Android — a Play Store permite direcionar para pagamento externo, então
+ *             mostra os planos e leva ao site.
+ */
+
+/** Onde a assinatura acontece. Só usado fora do iOS. */
+const SITE_URL = "https://alphadog.com.br/assinar";
+
 const INCLUDES = [
   { text: "Plano montado a partir do perfil do seu cão", soon: false },
-  { text: "Exercícios guiados passo a passo, com o erro comum antes", soon: false },
-  { text: "Sessão cronometrada com registro real de cada repetição", soon: false },
+  { text: "11 exercícios guiados passo a passo", soon: false },
+  { text: "Sessão cronometrada com registro de cada repetição", soon: false },
   { text: "Histórico, estatísticas e sequência diária", soon: false },
   { text: "Reconhecimento de postura pela câmera", soon: true },
   { text: "Feedback automático em tempo real", soon: true },
 ];
 
-const FAQ = [
-  {
-    q: "Como funciona a cobrança?",
-    a: "É uma assinatura recorrente: o acesso fica ativo enquanto o plano estiver pago. Você pode cancelar quando quiser, direto na sua conta, e o acesso continua até o fim do período já pago.",
-  },
-  {
-    q: "A câmera com IA já funciona?",
-    a: "Ainda não — o reconhecimento de postura está em treinamento e aparece marcado como “Em breve”. Hoje quem marca o acerto é você. Quando a câmera ficar pronta, entra por atualização, sem custo extra para quem já assina.",
-  },
-  {
-    q: "Posso cancelar quando quiser?",
-    a: "Sim, sem multa e sem burocracia. O acesso vai até o fim do período que você já pagou.",
-  },
-];
-
-/**
- * Tela de assinatura — o paywall do app.
- *
- * O app é 100% pago: sem assinatura ativa, o tutor cai aqui e só sai daqui
- * assinando (ou saindo da conta). A tela vende o que existe hoje e marca o que é
- * roadmap — vender no presente uma IA que não está no ar seria enganoso, ainda
- * mais na tela onde o dinheiro troca de mãos.
- *
- * O checkout real ainda não está ligado (a cobrança entra quando houver conta no
- * gateway). Até lá, o botão explica isso em vez de fingir que ativou — um
- * "assinatura ativada" falso é o mesmo pecado do "Excelente!" sem o cão sentar.
- */
 export default function Subscribe() {
-  const { signOut } = useAuth();
-  const [planId, setPlanId] = useState<PlanId>(DEFAULT_PLAN_ID);
-  const selected = PLANS.find((p) => p.id === planId)!;
+  const { signOut, session } = useAuth();
+  const queryClient = useQueryClient();
+  const isIOS = Platform.OS === "ios";
 
-  function handleSubscribe() {
-    // Placeholder honesto: sem gateway configurado, não há como assinar de
-    // verdade. Não simula sucesso.
-    Alert.alert(
-      "Pagamento em configuração",
-      "O checkout entra assim que a conta de pagamento estiver ligada. A tela e os planos já estão prontos — falta só conectar o gateway.",
-      [{ text: "Entendi" }],
-    );
+  /** Revalida a assinatura — para quem acabou de assinar em outro aparelho. */
+  function recheck() {
+    queryClient.invalidateQueries({ queryKey: ["subscription"] });
   }
 
   return (
@@ -84,14 +71,25 @@ export default function Subscribe() {
           </Pressable>
         </View>
 
-        <Text style={styles.eyebrow}>Acesso completo</Text>
-        <Text style={styles.title}>Comece a treinar o seu cão hoje</Text>
+        <Text style={styles.eyebrow}>Acesso</Text>
+        <Text style={styles.title}>
+          {isIOS ? "Sua conta ainda não tem acesso" : "Comece a treinar o seu cão"}
+        </Text>
         <Text style={styles.lead}>
-          Dez minutos por dia, um plano feito para ele, e o registro de cada
-          sessão. Uma assinatura destrava o app inteiro.
+          {isIOS
+            ? "O AlphaDog libera todos os treinos assim que a sua conta tiver acesso ativo. Se você já ativou, use o botão abaixo para atualizar."
+            : "Dez minutos por dia, um plano feito para ele, e o registro de cada sessão. Uma assinatura destrava o app inteiro."}
         </Text>
 
-        {/* O que inclui */}
+        {session?.user.email ? (
+          <View style={styles.account}>
+            <Ionicons name="person-circle-outline" size={18} color={color.ink400} />
+            <Text style={styles.accountText}>{session.user.email}</Text>
+          </View>
+        ) : null}
+
+        {/* O que a assinatura inclui. Descrever o produto é permitido nas duas
+            lojas; o que não pode, no iOS, é preço e caminho de compra. */}
         <View style={styles.includes}>
           {INCLUDES.map((item) => (
             <View key={item.text} style={styles.includeRow}>
@@ -109,57 +107,48 @@ export default function Subscribe() {
           ))}
         </View>
 
-        {/* Seletor de plano */}
-        <View style={styles.plans}>
-          {PLANS.map((plan) => {
-            const active = plan.id === planId;
-            const perDay = formatBRL(pricePerDayCents(plan));
-            return (
-              <Pressable
-                key={plan.id}
-                onPress={() => setPlanId(plan.id)}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: active }}
-                style={[styles.plan, active && styles.planActive]}
-              >
-                <View style={styles.planLeft}>
-                  <View
-                    style={[styles.radio, active && styles.radioActive]}
-                  >
-                    {active && <View style={styles.radioDot} />}
-                  </View>
-                  <View>
-                    <Text style={styles.planName}>{plan.name}</Text>
-                    <Text style={styles.planPerDay}>{perDay} por dia</Text>
-                  </View>
+        {/* Planos e preços: fora do iOS apenas. */}
+        {!isIOS && (
+          <View style={styles.plans}>
+            {PLANS.map((plan) => (
+              <View key={plan.id} style={styles.plan}>
+                <View>
+                  <Text style={styles.planName}>{plan.name}</Text>
+                  <Text style={styles.planPerDay}>
+                    {formatBRL(pricePerDayCents(plan))} por dia
+                  </Text>
                 </View>
                 <View style={styles.planRight}>
-                  {plan.badge && (
-                    <Text style={styles.planBadge}>{plan.badge}</Text>
-                  )}
+                  {plan.badge ? <Text style={styles.planBadge}>{plan.badge}</Text> : null}
                   <Text style={styles.planPrice}>{formatBRL(plan.priceCents)}</Text>
                 </View>
-              </Pressable>
-            );
-          })}
-        </View>
+              </View>
+            ))}
+          </View>
+        )}
 
-        <Button label={`Assinar — ${selected.name}`} onPress={handleSubscribe} />
-        <Text style={styles.recurring}>
-          Cobrança recorrente de {formatBRL(selected.priceCents)} a cada{" "}
-          {selected.days} dias. Cancele quando quiser; o acesso vai até o fim do
-          período pago.
-        </Text>
-
-        {/* FAQ */}
-        <View style={styles.faq}>
-          {FAQ.map((item) => (
-            <View key={item.q} style={styles.faqItem}>
-              <Text style={styles.faqQ}>{item.q}</Text>
-              <Text style={styles.faqA}>{item.a}</Text>
-            </View>
-          ))}
-        </View>
+        {isIOS ? (
+          <>
+            <Button label="Já ativei — atualizar" onPress={recheck} />
+            <Text style={styles.footnote}>
+              Use o mesmo e-mail desta conta para que o acesso apareça aqui.
+            </Text>
+          </>
+        ) : (
+          <>
+            <Button
+              label="Assinar no site"
+              onPress={() => Linking.openURL(SITE_URL)}
+            />
+            <Pressable onPress={recheck} accessibilityRole="button" style={styles.recheck}>
+              <Text style={styles.recheckText}>Já assinei — atualizar</Text>
+            </Pressable>
+            <Text style={styles.footnote}>
+              Assine com o mesmo e-mail desta conta. O acesso libera sozinho em
+              alguns segundos após a confirmação do pagamento.
+            </Text>
+          </>
+        )}
       </ScrollView>
     </Screen>
   );
@@ -177,6 +166,13 @@ const styles = StyleSheet.create({
   eyebrow: { ...type.overline, color: color.alpha400 },
   title: { ...type.title, color: color.white, marginTop: -space.sm },
   lead: { ...type.body, color: color.ink300 },
+  account: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.sm,
+    paddingVertical: space.sm,
+  },
+  accountText: { ...type.bodySmall, color: color.ink400 },
   includes: {
     gap: space.md,
     backgroundColor: color.ink800,
@@ -192,28 +188,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: color.ink700,
     borderRadius: radius.lg,
     padding: space.lg,
-  },
-  planActive: { borderColor: color.alpha500, backgroundColor: color.ink800 },
-  planLeft: { flexDirection: "row", alignItems: "center", gap: space.md },
-  radio: {
-    width: 22,
-    height: 22,
-    borderRadius: radius.pill,
-    borderWidth: 2,
-    borderColor: color.ink500,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  radioActive: { borderColor: color.alpha500 },
-  radioDot: {
-    width: 10,
-    height: 10,
-    borderRadius: radius.pill,
-    backgroundColor: color.alpha500,
   },
   planName: { ...type.subheading, color: color.white },
   planPerDay: { ...type.caption, color: color.ink400 },
@@ -229,9 +207,7 @@ const styles = StyleSheet.create({
     fontFamily: type.label.fontFamily,
   },
   planPrice: { ...type.subheading, color: color.white },
-  recurring: { ...type.caption, color: color.ink400, textAlign: "center" },
-  faq: { gap: space.lg, marginTop: space.lg },
-  faqItem: { gap: space.xs },
-  faqQ: { ...type.subheading, color: color.white },
-  faqA: { ...type.bodySmall, color: color.ink300 },
+  recheck: { alignItems: "center", paddingVertical: space.md },
+  recheckText: { ...type.label, color: color.alpha400 },
+  footnote: { ...type.caption, color: color.ink500, textAlign: "center" },
 });

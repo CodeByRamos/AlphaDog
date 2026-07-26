@@ -9,7 +9,9 @@ const expoConfig = require("eslint-config-expo/flat");
 module.exports = defineConfig([
   expoConfig,
   {
-    ignores: ["dist/*", ".expo/*", "expo-env.d.ts"],
+    // Saídas de build. `dist-web` é o export para navegador — código gerado,
+    // com bundle minificado dentro; lintar isso rende milhares de falsos erros.
+    ignores: ["dist/*", "dist-web/*", "dist-verify/*", ".expo/*", "expo-env.d.ts"],
   },
   {
     // scripts/*.mjs são ferramentas Node (geração de assets), não código do app.
