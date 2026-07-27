@@ -1,0 +1,10 @@
+# Fallback de aplicação de página única (Netlify, Cloudflare Pages).
+#
+# O export web do Expo gera UM index.html; as rotas (/home, /subscribe,
+# /training/sit) são resolvidas no navegador, não no servidor. Sem esta regra o
+# host procura um arquivo físico em /home, não encontra e devolve 404 — que é
+# exatamente o que acontece quando alguém abre um link direto ou dá F5.
+#
+# O status 200 (e não 301) é o que importa: a URL original é preservada para o
+# roteador do app conseguir lê-la.
+/*    /index.html   200
