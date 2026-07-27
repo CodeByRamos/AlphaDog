@@ -16,6 +16,21 @@
 -- ============================================================================
 
 
+-- ---------------------------------------------------------------- pré-requisito
+
+-- Mantém updated_at correto em qualquer update. Definida aqui (e não assumida
+-- da migration 0001) para o script funcionar sozinho em qualquer banco.
+create or replace function public.touch_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+
 -- ---------------------------------------------------------------- assinaturas
 
 do $$
@@ -99,7 +114,7 @@ alter type exercise_id add value if not exists 'find_it';
 insert into public.subscriptions (user_id, status, plan_id, current_period_end)
 select id, 'active', 'trimestral', now() + interval '1 year'
 from auth.users
-where email = 'SEU_EMAIL_AQUI'
+where email = 'joaovsr1020@gmail.com'
 on conflict (user_id) do update
   set status = 'active',
       plan_id = 'trimestral',
