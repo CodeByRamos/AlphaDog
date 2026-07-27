@@ -28,9 +28,19 @@ const anonKey =
 
 if (!url || !anonKey) {
   // Falha alto no boot em vez de dar erro obscuro na primeira query.
+  //
+  // A mensagem cita as duas origens de propósito. Em desenvolvimento as chaves
+  // vêm do .env local; num APK elas precisam estar no EAS, porque o .env é
+  // gitignored e o build acontece a partir do git — foi assim que o primeiro
+  // build de produção saiu sem chave nenhuma e travou no splash.
   throw new Error(
-    "Supabase não configurado. Defina EXPO_PUBLIC_SUPABASE_URL e " +
-      "EXPO_PUBLIC_SUPABASE_ANON_KEY em apps/mobile/.env — ver docs/PENDENCIAS.md",
+    "Supabase não configurado.\n\n" +
+      "Em desenvolvimento: defina EXPO_PUBLIC_SUPABASE_URL e " +
+      "EXPO_PUBLIC_SUPABASE_ANON_KEY em apps/mobile/.env\n\n" +
+      "Em build (APK/AAB): as variáveis precisam estar no EAS —\n" +
+      "  eas env:create --name EXPO_PUBLIC_SUPABASE_URL --value ... --environment production\n\n" +
+      "O .env não vai para o build: ele é ignorado pelo git, e o EAS compila a " +
+      "partir do repositório.",
   );
 }
 

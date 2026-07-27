@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import * as SplashScreen from "expo-splash-screen";
 import React from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { Button } from "./Button";
@@ -35,6 +36,13 @@ export class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
+    // Sem isto o splash fica congelado para sempre: quem esconde a tela de
+    // abertura é um efeito no layout raiz, que não chega a rodar quando a falha
+    // acontece durante o primeiro render. O usuário via o logo parado e nenhuma
+    // pista — foi exatamente o que aconteceu no primeiro build de produção,
+    // quando as chaves do Supabase não entraram no binário.
+    void SplashScreen.hideAsync().catch(() => {});
+
     // Vai para o console do Metro em dev e para o logcat/Console em produção.
     // Quando houver Sentry ou equivalente, é aqui que ele entra.
     console.error(
