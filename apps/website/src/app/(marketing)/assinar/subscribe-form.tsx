@@ -24,7 +24,7 @@ import { createClient } from "@/lib/supabase/client";
 
 type Step = "auth" | "plan" | "paying" | "pix" | "done";
 
-export function SubscribeForm() {
+export function SubscribeForm({ initialPlan }: { initialPlan?: PlanId }) {
   const [supabase] = useState(() => createClient());
   const [step, setStep] = useState<Step>("auth");
   const [email, setEmail] = useState("");
@@ -33,7 +33,9 @@ export function SubscribeForm() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [planId, setPlanId] = useState<PlanId>("trimestral");
+  // Respeita o plano escolhido no fim do quiz: fazer o tutor decidir a mesma
+  // coisa duas vezes é onde funil perde gente.
+  const [planId, setPlanId] = useState<PlanId>(initialPlan ?? "trimestral");
   const [method, setMethod] = useState<PaymentMethod>("pix");
   const [taxId, setTaxId] = useState("");
   const [session, setSession] = useState<CheckoutSession | null>(null);

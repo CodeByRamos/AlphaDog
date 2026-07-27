@@ -34,7 +34,17 @@ export const dynamic = "force-dynamic";
  * A conta é a mesma do app porque o login é o mesmo Supabase. Sem isso, o
  * pagamento cairia numa identidade que o aplicativo não enxerga.
  */
-export default function AssinarPage() {
+/** Planos válidos, para não confiar no que vem da URL. */
+const PLAN_IDS = ["mensal", "trimestral", "semestral"] as const;
+
+export default async function AssinarPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ plano?: string }>;
+}) {
+  const { plano } = await searchParams;
+  const initialPlan = PLAN_IDS.find((p) => p === plano);
+
   return (
     <Section className="bg-bone">
       <Container>
@@ -59,7 +69,7 @@ export default function AssinarPage() {
           )}
 
           <div className="shadow-card border-ink-100 mt-8 rounded-2xl border bg-white p-6 sm:p-8">
-            <SubscribeForm />
+            <SubscribeForm initialPlan={initialPlan} />
           </div>
 
           <p className="text-ink-500 mt-6 text-center text-sm">

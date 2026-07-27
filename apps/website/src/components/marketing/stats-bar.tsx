@@ -7,13 +7,14 @@ export function StatsBar() {
       <Container>
         <dl className="grid grid-cols-2 gap-8 py-10 sm:grid-cols-4">
           {stats.map((stat) => (
-            <div key={stat.label} className="text-center">
-              <dt className="sr-only">{stat.label}</dt>
-              <dd>
-                <span className="font-display text-ink-900 block text-3xl font-extrabold">
-                  {stat.value}
-                </span>
-                <span className="text-ink-500 mt-1 block text-sm">{stat.label}</span>
+            // flex-col-reverse: o valor aparece em cima, mas no HTML o <dt>
+            // (rótulo) vem antes do <dd> (valor), como a semântica pede. Antes
+            // o rótulo existia duas vezes — num dt oculto e de novo no dd — e o
+            // leitor de tela anunciava tudo em dobro.
+            <div key={stat.label} className="flex flex-col-reverse text-center">
+              <dt className="text-ink-500 mt-1 text-sm">{stat.label}</dt>
+              <dd className="font-display text-ink-900 text-3xl font-extrabold">
+                {stat.value}
               </dd>
             </div>
           ))}

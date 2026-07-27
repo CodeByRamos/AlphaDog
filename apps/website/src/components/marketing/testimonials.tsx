@@ -3,6 +3,11 @@ import { Container, Section, SectionHeader } from "@/components/ui/section";
 import { testimonials } from "@/lib/content/marketing";
 
 export function Testimonials() {
+  // Sem depoimento real, a seção não aparece. Preencher com relato inventado é
+  // propaganda enganosa; deixar uma grade vazia é pior ainda em confiança. Ela
+  // volta sozinha quando houver tutor de verdade em `testimonials`.
+  if (testimonials.length === 0) return null;
+
   return (
     <Section className="bg-white">
       <Container>

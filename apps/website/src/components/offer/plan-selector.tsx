@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Check, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { routes } from "@/lib/routes";
 import {
   DEFAULT_PLAN_ID,
   formatBRL,
@@ -78,8 +80,14 @@ export function PlanSelector({ pricing }: { pricing: PlanPricing[] }) {
         <PaymentMethodPicker />
       </div>
 
-      <Button size="lg" block className="mt-6">
-        Começar o treino do meu cão
+      {/* Fim do funil. Antes este botão não levava a lugar nenhum: o tutor
+          respondia o quiz inteiro, escolhia o plano e travava num beco. Agora
+          segue para a assinatura levando o plano escolhido, para ele não ter
+          que decidir duas vezes. */}
+      <Button asChild size="lg" block className="mt-6">
+        <Link href={`${routes.subscribe}?plano=${selected}`}>
+          Começar o treino do meu cão
+        </Link>
       </Button>
 
       <p className="text-ink-500 mt-4 flex items-center justify-center gap-2 text-center text-sm">

@@ -42,10 +42,14 @@ export const heroCards = {
   streak: { title: "Sequência diária", value: "12 dias" },
   program: {
     title: "Programa de treino",
-    rows: ["Atenção no nome", "Senta com distração", "Passeio na guia"],
+    // Exercícios que existem de verdade na biblioteca.
+    rows: ["Olha pra mim", "Senta", "Passeio na guia"],
   },
-  experts: { title: "Especialistas", cta: "Falar com especialista" },
-  lesson: { title: "Vídeo-aula", name: "Vem aqui", duration: "10 min" },
+  // Antes: "Falar com especialista" e "Vídeo-aula" — nenhum dos dois existe no
+  // app. Card do hero é vitrine do produto: anunciar ali o que não se entrega é
+  // o mesmo erro do depoimento inventado, só que em cima da dobra.
+  stats: { title: "Sessões", value: "28", label: "nas últimas 4 semanas" },
+  session: { title: "Última sessão", name: "Deitar", duration: "10 min" },
   tip: {
     title: "Dica do dia",
     body: "Termine sempre num acerto — nunca numa falha.",
@@ -68,38 +72,14 @@ export const stats = [
   { value: "0", label: "coleira de choque, enforcador ou grito" },
 ] as const;
 
-export const features = [
-  {
-    title: "Plano diário",
-    description:
-      "Todo dia o app diz exatamente o que treinar e por quanto tempo. Sem adivinhação, sem improviso.",
-  },
-  {
-    title: "Vídeo-aulas curtas",
-    description:
-      "Cada comando em vídeo, do primeiro passo ao reforço. Assista e treine junto, no mesmo minuto.",
-  },
-  {
-    title: "Comandos e jogos",
-    description:
-      "Obediência e estímulo mental na mesma trilha — porque cão entediado inventa problema.",
-  },
-  {
-    title: "Correção de comportamento",
-    description:
-      "Latido, ansiedade de separação, puxar na guia e destruição têm trilhas próprias.",
-  },
-  {
-    title: "Pergunte a um especialista",
-    description:
-      "Travou? Mande sua dúvida com vídeo e receba resposta de um adestrador certificado.",
-  },
-  {
-    title: "Sequência e desafios",
-    description:
-      "Constância é o que treina cão. A sequência diária e os desafios mantêm você no jogo.",
-  },
-] as const;
+/*
+ * `features` foi removido junto com o componente FeatureGrid.
+ *
+ * Descrevia o produto antigo — vídeo-aulas, trilhas de correção de
+ * comportamento, especialista certificado respondendo dúvidas — e nada disso
+ * existe no aplicativo. Quem faz esse papel hoje é `capabilities`, que separa o
+ * que está no ar do que está em construção.
+ */
 
 export const comparison = {
   title: "O que custa treinar um cão no Brasil",
@@ -110,15 +90,29 @@ export const comparison = {
     { service: "Aula em grupo", price: "R$ 200 a R$ 500 por mês" },
     { service: "Livros e cursos avulsos", price: "R$ 40 a R$ 300 cada" },
   ],
+  /**
+   * O que a assinatura inclui.
+   *
+   * Cada linha aqui é uma promessa numa tabela de PREÇO — ou seja, parte da
+   * oferta comercial. Antes esta lista prometia vídeo-aulas, especialista
+   * certificado à disposição e trilhas de correção de comportamento; nada disso
+   * existe no aplicativo. Vender o que não se entrega é o caminho curto para
+   * reembolso, reclamação no Procon e reprovação na loja.
+   *
+   * Regra para editar: só entra o que o tutor consegue usar hoje, ao abrir o
+   * app. O que está em construção vive na seção `capabilities`, marcado.
+   */
   alphadog: {
     label: "AlphaDog",
     price: "menos de R$ 2 por dia",
     included: [
-      "Programa montado para o seu cão",
-      "Vídeo-aulas e guias passo a passo",
-      "Especialista certificado à disposição",
-      "Trilhas de correção de comportamento",
+      "Plano montado a partir do perfil do seu cão",
+      "11 exercícios guiados passo a passo",
+      "Sessão cronometrada com registro de cada repetição",
+      "Histórico, estatísticas e sequência diária",
       "Acesso quando e onde você quiser",
+      // Política, não funcionalidade: depende só de você honrar. Mantida porque
+      // a página /garantia a descreve e o schema já registra o pedido.
       "Garantia de 30 dias",
     ],
   },
@@ -144,26 +138,24 @@ export const howItWorks = [
   },
 ] as const;
 
-export const testimonials = [
-  {
-    quote:
-      "A Nina puxava tanto a guia que eu tinha desistido de passear. Em três semanas o passeio virou a melhor parte do meu dia.",
-    author: "Marina R.",
-    dog: "Nina, Border Collie, 2 anos",
-  },
-  {
-    quote:
-      "O Thor latia para tudo que passava. O que mudou foi ter um passo a passo claro em vez de dez vídeos soltos no YouTube.",
-    author: "Rafael M.",
-    dog: "Thor, Pastor Alemão, 4 anos",
-  },
-  {
-    quote:
-      "Adotei a Mel adulta e achei que fosse tarde demais. As sessões de 10 minutos foram a única coisa que consegui manter.",
-    author: "Carolina S.",
-    dog: "Mel, SRD, 6 anos",
-  },
-] as const;
+/**
+ * Depoimentos.
+ *
+ * VAZIO de propósito, e a seção some sozinha enquanto estiver assim.
+ *
+ * Aqui havia três depoimentos com nome, raça e idade de cães — todos
+ * inventados. Publicar relato de cliente que não existe é propaganda enganosa
+ * (CDC art. 37) e motivo de reprovação nas duas lojas de aplicativo. O risco não
+ * compensa: um print da página com depoimento falso é prova contra você.
+ *
+ * Assim que houver tutor real usando o app, peça autorização por escrito e
+ * preencha aqui com o relato dele, do jeito que ele escreveu.
+ */
+export const testimonials: readonly {
+  quote: string;
+  author: string;
+  dog: string;
+}[] = [];
 
 export const faq = [
   {

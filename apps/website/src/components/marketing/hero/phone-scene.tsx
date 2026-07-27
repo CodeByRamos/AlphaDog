@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  Check,
-  ChevronRight,
-  Flame,
-  MessageCircle,
-  Play,
-  Sparkles,
-} from "lucide-react";
+import { Check, ChevronRight, Flame, Sparkles } from "lucide-react";
 import { heroCards } from "@/lib/content/marketing";
 import { FloatingCard } from "./floating-card";
 import { PhoneFrame } from "./phone-frame";
@@ -149,7 +142,9 @@ export function PhoneScene() {
             </ul>
           </FloatingCard>
 
-          {/* Especialistas — meio direito */}
+          {/* Estatísticas — meio direito. Era "Falar com especialista", que o
+              app não oferece; card de hero é vitrine, e anunciar ali o que não
+              se entrega é o mesmo erro do depoimento inventado. */}
           <FloatingCard
             className="top-[45%] -right-[3%] w-[180px]"
             depth={0.85}
@@ -157,26 +152,18 @@ export function PhoneScene() {
             delay={880}
             floatDuration={6.8}
           >
-            <p className="text-[0.6875rem] font-bold">{heroCards.experts.title}</p>
-            <div className="bg-ink-900 mt-2 flex items-center gap-2 rounded-lg px-2.5 py-1.5">
-              <MessageCircle className="text-alpha-500 size-3.5" />
-              <span className="text-[0.625rem] font-semibold text-white">
-                {heroCards.experts.cta}
-              </span>
-            </div>
-            <div className="mt-2 flex -space-x-2">
-              {["bg-alpha-300", "bg-sage-300", "bg-trust-300", "bg-alpha-500"].map(
-                (c) => (
-                  <span
-                    key={c}
-                    className={`size-6 rounded-full ring-2 ring-white ${c}`}
-                  />
-                ),
-              )}
-            </div>
+            <p className="text-ink-400 text-[0.625rem] font-semibold">
+              {heroCards.stats.title}
+            </p>
+            <p className="font-display text-3xl leading-none font-extrabold">
+              {heroCards.stats.value}
+            </p>
+            <p className="text-ink-500 mt-1 text-[0.625rem]">
+              {heroCards.stats.label}
+            </p>
           </FloatingCard>
 
-          {/* Vídeo-aula — baixo esquerdo */}
+          {/* Última sessão — baixo esquerdo. Era "Vídeo-aula". */}
           <FloatingCard
             className="bottom-[6%] -left-[3%] w-[195px]"
             depth={1}
@@ -185,19 +172,19 @@ export function PhoneScene() {
             floatDuration={5.9}
           >
             <div className="flex items-center gap-2.5">
-              <span className="bg-ink-900 flex size-11 shrink-0 items-center justify-center rounded-xl">
-                <Play className="fill-alpha-500 text-alpha-500 size-4" />
+              <span className="bg-sage-500 flex size-11 shrink-0 items-center justify-center rounded-xl">
+                <Check className="size-5 text-white" strokeWidth={3} />
               </span>
               <div className="min-w-0">
                 <p className="text-ink-400 text-[0.625rem] font-semibold">
-                  {heroCards.lesson.title}
+                  {heroCards.session.title}
                 </p>
                 <p className="font-display truncate text-sm font-extrabold">
-                  {heroCards.lesson.name}
+                  {heroCards.session.name}
                 </p>
               </div>
               <span className="text-ink-400 ml-auto shrink-0 text-[0.625rem] font-bold">
-                {heroCards.lesson.duration}
+                {heroCards.session.duration}
               </span>
             </div>
           </FloatingCard>
