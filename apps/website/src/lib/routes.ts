@@ -15,6 +15,8 @@ export const routes = {
   privacy: "/privacidade",
   subscriptionPolicy: "/politica-de-assinatura",
   guarantee: "/garantia",
+  subscribe: "/assinar",
+  download: "/baixar",
 } as const;
 
 /**
@@ -27,6 +29,7 @@ export const routes = {
 export const navLinks = [
   { href: routes.method, label: "Método" },
   { href: routes.reviews, label: "Avaliações" },
+  { href: routes.download, label: "Baixar app" },
 ] as const;
 
 export const footerNav = [
