@@ -9,8 +9,8 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Suspense, lazy, useState } from "react";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { Button } from "../../src/components/Button";
 import { Card } from "../../src/components/Card";
@@ -20,8 +20,26 @@ import { useDogData } from "../../src/features/dashboard/useDogData";
 import { useTrainingSession } from "../../src/features/training/useTrainingSession";
 import { useAuth } from "../../src/state/auth";
 import { color, duration, radius, space, type } from "../../src/theme";
+import { ErrorBoundary } from "../../src/components/ErrorBoundary";
 import { useDetector } from "../../src/vision/useDetector";
-import { CameraStage } from "../../src/features/training/CameraStage";
+
+/**
+ * A câmera entra por import tardio, e isso não é otimização — é o que mantém o
+ * app abrindo.
+ *
+ * O expo-router percorre TODAS as rotas na inicialização para montar a árvore
+ * de navegação. Com import estático, `react-native-vision-camera` era carregado
+ * no boot mesmo para quem nunca abriria um treino; qualquer problema no módulo
+ * nativo dela travava o aplicativo na tela de abertura, antes de existir tela
+ * para mostrar o erro.
+ *
+ * Assim, a pilha de visão só toca o processo quando o tutor de fato inicia uma
+ * sessão. Se ela falhar, falha ali — dentro de um limite que sabe se recuperar,
+ * e com o resto do app funcionando.
+ */
+const CameraStage = lazy(async () => ({
+  default: (await import("../../src/features/training/CameraStage")).CameraStage,
+}));
 
 type Phase = "brief" | "live" | "done";
 
@@ -201,18 +219,32 @@ export default function TrainingScreen() {
   }
 
   // phase === "live"
+  //
+  // Suspense cobre o carregamento do módulo da câmera; ErrorBoundary cobre a
+  // falha dele. Sem o segundo, um problema na pilha de visão derrubaria a tela
+  // inteira e o tutor perderia a sessão — em vez de apenas ficar sem o vídeo.
   return (
-    <CameraStage
-      exercise={exercise}
-      dogName={dog.name}
-      detector={detector}
-      state={training.state}
-      onFinish={finish}
-      onMarkSuccess={training.markSuccess}
-      onFrame={training.pushFrame}
-      feedbackText={feedbackText(training.state, dog.name)}
-      tone={feedbackTone(training.state.feedback)}
-    />
+    <ErrorBoundary label="camera">
+      <Suspense
+        fallback={
+          <Screen style={styles.center}>
+            <ActivityIndicator color={color.alpha500} />
+          </Screen>
+        }
+      >
+        <CameraStage
+          exercise={exercise}
+          dogName={dog.name}
+          detector={detector}
+          state={training.state}
+          onFinish={finish}
+          onMarkSuccess={training.markSuccess}
+          onFrame={training.pushFrame}
+          feedbackText={feedbackText(training.state, dog.name)}
+          tone={feedbackTone(training.state.feedback)}
+        />
+      </Suspense>
+    </ErrorBoundary>
   );
 }
 
