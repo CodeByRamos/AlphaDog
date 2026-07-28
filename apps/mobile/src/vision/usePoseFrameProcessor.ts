@@ -4,9 +4,9 @@ import {
   letterboxFor,
   type Detection,
 } from "@alphadog/core";
-import { useMemo } from "react";
+import { useCallback } from "react";
+import { runOnJS } from "react-native-reanimated";
 import { useFrameProcessor, type Frame } from "react-native-vision-camera";
-import { Worklets } from "react-native-worklets-core";
 import type { DetectorStatus } from "./detector";
 
 /**
@@ -16,34 +16,35 @@ import type { DetectorStatus } from "./detector";
  * só o resultado já decodificado. Copiar imagem 30 vezes por segundo para o JS
  * derrubaria o FPS antes de o modelo virar gargalo.
  *
- * Só processa 1 frame a cada FRAME_SKIP. O cão não muda de postura em 33ms, e o
- * RepTracker já exige acordo em 3 de 5 leituras.
+ * O redimensionamento é feito à mão, e não com vision-camera-resize-plugin.
+ * O motivo é grave: aquele plugin exige `react-native-worklets-core`, enquanto o
+ * Reanimated 4 exige `react-native-worklets`. Os dois instalam runtime de
+ * worklet nativo no início do processo e não convivem — com ambos presentes o
+ * aplicativo travava na tela de abertura, antes de executar uma linha de
+ * JavaScript. Sem log, sem erro. Uma dependência a menos vale mais que a
+ * conveniência de uma função pronta.
+ *
+ * `runOnJS` vem do Reanimated, que já é dependência obrigatória — não de um
+ * segundo pacote de worklets.
  */
-const FRAME_SKIP = 3;
 
 /**
- * Plugin de redimensionamento, carregado com proteção.
+ * Um frame a cada três.
  *
- * Módulo nativo: num APK gerado antes de a dependência entrar, o require lança.
- * Resolver aqui, uma vez, mantém a ordem dos hooks estável durante toda a vida
- * do app — o resultado nunca muda entre renders.
+ * O cão não muda de postura em 33ms, e o RepTracker já exige acordo em 3 de 5
+ * leituras. Processar todo frame gastaria bateria sem melhorar a decisão — e
+ * aqui, com o redimensionamento em JavaScript, também sobraria menos tempo por
+ * quadro.
  */
-const resizeModule: { useResizePlugin?: () => { resize: unknown } } | null = (() => {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    return require("vision-camera-resize-plugin");
-  } catch {
-    return null;
-  }
-})();
+const FRAME_SKIP = 3;
 
 export function usePoseFrameProcessor(
   detector: DetectorStatus,
   /**
    * `frameWidth`/`frameHeight` acompanham a detecção porque a caixa vem em
-   * pixels do frame, e a UI precisa convertê-la para a tela. Normalizar aqui
-   * seria tentador e errado: dividir x por largura e y por altura distorce a
-   * razão de aspecto — que é justamente a característica mais pesada do
+   * pixels do frame, e a UI precisa convertê-la para a tela. Normalizar no
+   * worklet seria tentador e errado: dividir x por largura e y por altura
+   * distorce a razão de aspecto — a característica de maior peso no
    * classificador de postura.
    */
   onDetection: (
@@ -53,52 +54,71 @@ export function usePoseFrameProcessor(
     frameHeight: number,
   ) => void,
 ) {
-  // Chamada condicional só na aparência: `resizeModule` é constante do módulo,
-  // então o mesmo caminho roda em todos os renders.
-  const resizeApi = resizeModule?.useResizePlugin?.() ?? null;
-  const resize = resizeApi?.resize ?? null;
-
-  // A ponte worklet -> JS. Criada uma vez: recriar a cada render invalidaria o
-  // frame processor e reiniciaria a câmera.
-  const emit = useMemo(() => Worklets.createRunOnJS(onDetection), [onDetection]);
+  // Estável entre renders: recriar invalidaria o frame processor e reiniciaria
+  // a câmera a cada tick da sessão.
+  const emit = useCallback(onDetection, [onDetection]);
 
   const model = detector.kind === "ready" ? detector.model : null;
-  const enabled = model != null && resize != null;
 
-  const processor = useFrameProcessor(
+  return useFrameProcessor(
     (frame: Frame) => {
       "worklet";
-      if (!enabled) return;
+      if (model == null) return;
       if (frame.timestamp % FRAME_SKIP !== 0) return;
 
       try {
-        // O modelo pede [1, 3, 640, 640] float32 — NCHW, canais primeiro. O
-        // plugin entrega nesse layout, sem transposição manual por frame.
-        const resized = (resize as (f: Frame, o: unknown) => { buffer: ArrayBufferLike })(
-          frame,
-          {
-            scale: { width: YOLO_INPUT_SIZE, height: YOLO_INPUT_SIZE },
-            pixelFormat: "rgb",
-            dataType: "float32",
-            rotation: "0deg",
-          },
-        );
+        // Pixels crus do frame. VisionCamera entrega RGBA de 8 bits por canal.
+        const raw = frame.toArrayBuffer();
+        const pixels = new Uint8Array(raw);
 
-        const outputs = model!.runSync([resized.buffer as ArrayBuffer]);
-        const raw = new Float32Array(outputs[0]!);
+        const fw = frame.width;
+        const fh = frame.height;
+        const size = YOLO_INPUT_SIZE;
 
-        // Desfaz o encaixe no quadrado para as coordenadas voltarem ao frame.
-        const detection = decodeYoloPose(raw, letterboxFor(frame.width, frame.height));
-        emit(detection, frame.timestamp / 1e9, frame.width, frame.height);
+        // Encaixe proporcional dentro do quadrado, com barras cinza — o mesmo
+        // pré-processamento do treino. Esticar mudaria a razão de aspecto da
+        // caixa, que é justamente o sinal que separa sentado de em pé.
+        const scale = Math.min(size / fw, size / fh);
+        const drawW = Math.round(fw * scale);
+        const drawH = Math.round(fh * scale);
+        const padX = Math.floor((size - drawW) / 2);
+        const padY = Math.floor((size - drawH) / 2);
+
+        // NCHW normalizado, que é o formato que o modelo declara.
+        const input = new Float32Array(3 * size * size);
+        const plane = size * size;
+        // 114/255: o cinza de preenchimento usado no treino.
+        const padValue = 114 / 255;
+        input.fill(padValue);
+
+        for (let y = 0; y < drawH; y++) {
+          // Vizinho mais próximo: interpolar custaria três vezes mais por pixel
+          // e o modelo foi treinado com imagens redimensionadas, não com
+          // qualidade fotográfica.
+          const srcY = Math.min(fh - 1, Math.floor(y / scale));
+          const rowOut = (y + padY) * size + padX;
+          const rowIn = srcY * fw;
+
+          for (let x = 0; x < drawW; x++) {
+            const srcX = Math.min(fw - 1, Math.floor(x / scale));
+            const i = (rowIn + srcX) * 4; // RGBA
+            const o = rowOut + x;
+            input[o] = pixels[i]! / 255;
+            input[plane + o] = pixels[i + 1]! / 255;
+            input[2 * plane + o] = pixels[i + 2]! / 255;
+          }
+        }
+
+        const outputs = model.runSync([input.buffer as ArrayBuffer]);
+        const scores = new Float32Array(outputs[0]!);
+
+        const detection = decodeYoloPose(scores, letterboxFor(fw, fh));
+        runOnJS(emit)(detection, frame.timestamp / 1e9, fw, fh);
       } catch {
         // Frame ruim não derruba a sessão. Perder uma leitura custa uma
         // repetição; travar a câmera custa o treino inteiro.
       }
     },
-    [enabled, model, resize, emit],
+    [model, emit],
   );
-
-  // Sem runtime nativo, nenhum processor: a câmera roda como espelho e o tutor
-  // marca o acerto no botão. É o modo que sempre funcionou.
-  return enabled ? processor : undefined;
 }
