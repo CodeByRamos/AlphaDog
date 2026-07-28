@@ -26,31 +26,49 @@ const url = process.env.EXPO_PUBLIC_SUPABASE_URL ?? (extra.supabaseUrl as string
 const anonKey =
   process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? (extra.supabaseAnonKey as string | undefined);
 
-if (!url || !anonKey) {
-  // Falha alto no boot em vez de dar erro obscuro na primeira query.
-  //
-  // A mensagem cita as duas origens de propósito. Em desenvolvimento as chaves
-  // vêm do .env local; num APK elas precisam estar no EAS, porque o .env é
-  // gitignored e o build acontece a partir do git — foi assim que o primeiro
-  // build de produção saiu sem chave nenhuma e travou no splash.
-  throw new Error(
-    "Supabase não configurado.\n\n" +
-      "Em desenvolvimento: defina EXPO_PUBLIC_SUPABASE_URL e " +
-      "EXPO_PUBLIC_SUPABASE_ANON_KEY em apps/mobile/.env\n\n" +
-      "Em build (APK/AAB): as variáveis precisam estar no EAS —\n" +
-      "  eas env:create --name EXPO_PUBLIC_SUPABASE_URL --value ... --environment production\n\n" +
-      "O .env não vai para o build: ele é ignorado pelo git, e o EAS compila a " +
-      "partir do repositório.",
-  );
-}
+/**
+ * As chaves chegaram ao binário?
+ *
+ * Este módulo NÃO lança quando elas faltam, e essa decisão custou caro para ser
+ * aprendida. Um `throw` aqui acontece durante o carregamento do módulo — e como
+ * o layout raiz importa este arquivo (via AuthProvider), a árvore inteira falha
+ * antes de qualquer componente montar. Nem o ErrorBoundary existe ainda. O
+ * resultado é o pior possível: logo parado na tela de abertura, para sempre,
+ * sem uma linha de explicação.
+ *
+ * Em vez disso o app abre, esta bandeira fica falsa e a porta de entrada mostra
+ * uma tela dizendo o que houve. Erro que aparece é erro que se conserta.
+ */
+export const isSupabaseConfigured = Boolean(url && anonKey);
 
-export const supabase = createClient<Database>(url, anonKey, {
-  auth: {
-    // AsyncStorage: é o que dá sessão persistente entre aberturas do app.
-    storage: AsyncStorage,
-    autoRefreshToken: true,
-    persistSession: true,
-    // No mobile não há URL de callback com token — isso é coisa de web.
-    detectSessionInUrl: false,
+export const SUPABASE_CONFIG_HELP =
+  "As chaves do Supabase não vieram neste build.\n\n" +
+  "Em desenvolvimento: defina EXPO_PUBLIC_SUPABASE_URL e " +
+  "EXPO_PUBLIC_SUPABASE_ANON_KEY em apps/mobile/.env\n\n" +
+  "Em build (APK/AAB): elas precisam estar no EAS, porque o .env é ignorado " +
+  "pelo git e o build acontece a partir do repositório:\n" +
+  "  eas env:create --name EXPO_PUBLIC_SUPABASE_URL --value ... --environment production";
+
+/**
+ * Cliente Supabase.
+ *
+ * Com as chaves ausentes, criamos um cliente apontando para um endereço
+ * inválido em vez de não criar nenhum: assim todo `import { supabase }` do app
+ * continua resolvendo, e a falha aparece como tela de erro em vez de crash no
+ * carregamento. Nenhuma requisição chega a sair — a porta de entrada barra
+ * antes, olhando `isSupabaseConfigured`.
+ */
+export const supabase = createClient<Database>(
+  url || "https://placeholder.invalid",
+  anonKey || "sem-chave",
+  {
+    auth: {
+      // AsyncStorage: é o que dá sessão persistente entre aberturas do app.
+      storage: AsyncStorage,
+      autoRefreshToken: isSupabaseConfigured,
+      persistSession: true,
+      // No mobile não há URL de callback com token — isso é coisa de web.
+      detectSessionInUrl: false,
+    },
   },
-});
+);

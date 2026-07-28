@@ -9,7 +9,7 @@ import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ErrorBoundary } from "../src/components/ErrorBoundary";
@@ -17,9 +17,23 @@ import { UpdateBanner } from "../src/features/updates/UpdateBanner";
 import { AuthProvider } from "../src/state/auth";
 import { color } from "../src/theme";
 
-// Segura o splash até as fontes carregarem. Sem isto o app pisca com a fonte do
-// sistema antes de trocar — o "flash of unstyled text" que denuncia app amador.
-SplashScreen.preventAutoHideAsync();
+// Segura o splash até as fontes carregarem — sem isto o app pisca com a fonte
+// do sistema antes de trocar. O `.catch` importa: se a chamada falhar e a
+// promessa ficar sem tratamento, alguns aparelhos derrubam o processo no boot.
+SplashScreen.preventAutoHideAsync().catch(() => {});
+
+/**
+ * Teto de espera pelas fontes.
+ *
+ * Existe porque a tela de abertura ficou congelada em produção: `useFonts` não
+ * resolvia, o componente devolvia null indefinidamente, e como NADA era
+ * renderizado o ErrorBoundary nem chegava a montar para mostrar o problema. O
+ * usuário via o logo parado, sem mensagem, para sempre.
+ *
+ * Passado este tempo o app abre de qualquer jeito. Fonte do sistema é um
+ * detalhe estético; app que não abre é o produto inteiro.
+ */
+const FONT_TIMEOUT_MS = 4000;
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -41,19 +55,28 @@ export default function RootLayout() {
     Inter_600SemiBold,
   });
 
-  useEffect(() => {
-    // Esconde no erro também: app sem fonte bonita é melhor que app travado no
-    // splash para sempre.
-    if (loaded || error) SplashScreen.hideAsync();
-  }, [loaded, error]);
+  const [timedOut, setTimedOut] = useState(false);
 
-  if (!loaded && !error) return null;
+  useEffect(() => {
+    const timer = setTimeout(() => setTimedOut(true), FONT_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Três caminhos para abrir, e nenhum deles pode faltar: fontes prontas, erro
+  // ao carregá-las, ou tempo esgotado.
+  const ready = loaded || !!error || timedOut;
+
+  useEffect(() => {
+    if (ready) SplashScreen.hideAsync().catch(() => {});
+  }, [ready]);
+
+  if (!ready) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        {/* Fora dos providers: se a própria inicialização do Supabase ou do
-            React Query falhar, ainda existe uma tela para mostrar o erro. */}
+        {/* Fora dos providers: se a inicialização do Supabase ou do React Query
+            falhar, ainda existe uma tela para mostrar o erro. */}
         <ErrorBoundary label="root">
           <QueryClientProvider client={queryClient}>
             <AuthProvider>

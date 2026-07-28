@@ -1,10 +1,13 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import { Redirect } from "expo-router";
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { Screen } from "../src/components/Screen";
 import { listDogs } from "../src/data/dogs";
 import { useSubscription } from "../src/features/subscription/useSubscription";
+import { SUPABASE_CONFIG_HELP, isSupabaseConfigured } from "../src/lib/supabase";
 import { useAuth } from "../src/state/auth";
-import { color } from "../src/theme";
+import { color, space, type } from "../src/theme";
 
 /**
  * Porta de entrada: decide para onde o app abre.
@@ -27,10 +30,30 @@ export default function Gate() {
   const dogs = useQuery({
     queryKey: ["dogs"],
     queryFn: listDogs,
-    // Só busca cães depois de saber que o acesso está liberado. Sem assinatura,
-    // a tela nem chega no dashboard, então a query seria desperdício.
-    enabled: !!session && isActive,
+    // Só busca cães depois de saber que o acesso está liberado — e nunca sem
+    // configuração, senão cada render dispararia uma requisição condenada.
+    enabled: isSupabaseConfigured && !!session && isActive,
   });
+
+  // Build sem as chaves do Supabase: nada abaixo daqui funcionaria, e cada tela
+  // falharia de um jeito diferente. Dizer o que houve, uma vez, é mais útil que
+  // deixar o tutor descobrir por tentativa.
+  //
+  // Depois dos hooks, não antes: sair mais cedo mudaria a quantidade de hooks
+  // entre renders, que é justamente o que quebra a ordem interna do React.
+  if (!isSupabaseConfigured) {
+    return (
+      <Screen style={styles.center}>
+        <Ionicons name="cloud-offline-outline" size={44} color={color.alpha500} />
+        <Text style={[type.title, styles.title]}>App não configurado</Text>
+        <Text style={[type.body, styles.body]}>
+          Este build saiu sem as credenciais do servidor. Não é problema do seu
+          aparelho nem da sua conta.
+        </Text>
+        {__DEV__ && <Text style={styles.help}>{SUPABASE_CONFIG_HELP}</Text>}
+      </Screen>
+    );
+  }
 
   const deciding =
     !ready ||
@@ -50,3 +73,16 @@ export default function Gate() {
   if ((dogs.data ?? []).length === 0) return <Redirect href="/(auth)/onboarding" />;
   return <Redirect href="/(app)/home" />;
 }
+
+const styles = StyleSheet.create({
+  center: { justifyContent: "center", alignItems: "center", padding: space.xl, gap: space.lg },
+  title: { color: color.bone, textAlign: "center" },
+  body: { color: color.ink400, textAlign: "center" },
+  help: {
+    ...type.caption,
+    color: color.ink500,
+    backgroundColor: color.ink800,
+    padding: space.lg,
+    borderRadius: 12,
+  },
+});
