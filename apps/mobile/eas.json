@@ -12,7 +12,6 @@
       "extends": "base",
       "developmentClient": true,
       "distribution": "internal",
-      "channel": "development",
       "android": {
         "buildType": "apk"
       },
@@ -23,7 +22,6 @@
     "preview": {
       "extends": "base",
       "distribution": "internal",
-      "channel": "preview",
       "android": {
         "buildType": "apk"
       }
@@ -31,7 +29,6 @@
     "production": {
       "extends": "base",
       "autoIncrement": true,
-      "channel": "production",
       "android": {
         "buildType": "apk"
       },
@@ -42,7 +39,6 @@
     "playstore": {
       "extends": "base",
       "autoIncrement": true,
-      "channel": "production",
       "android": {
         "buildType": "app-bundle"
       }

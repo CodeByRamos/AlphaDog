@@ -13,7 +13,6 @@ import { useEffect, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ErrorBoundary } from "../src/components/ErrorBoundary";
-import { UpdateBanner } from "../src/features/updates/UpdateBanner";
 import { AuthProvider } from "../src/state/auth";
 import { color } from "../src/theme";
 
@@ -81,9 +80,6 @@ export default function RootLayout() {
           <QueryClientProvider client={queryClient}>
             <AuthProvider>
               <StatusBar style="light" />
-              {/* Fora do Stack: sem loja para avisar de versão nova, esta faixa
-                  precisa aparecer em qualquer tela, não só na inicial. */}
-              <UpdateBanner />
               <Stack
                 screenOptions={{
                   headerShown: false,
