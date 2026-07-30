@@ -21,10 +21,31 @@ import type { Database } from "./database.types";
 // vinha como o texto literal "${EXPO_PUBLIC_SUPABASE_URL}" — uma string não-nula
 // que passava no `??` e quebrava o cliente com "Invalid supabaseUrl". Ler do
 // process.env primeiro elimina isso.
+/**
+ * Limpa o que costuma vir junto do valor.
+ *
+ * Arquivos .env guardam `CHAVE="valor"`, e as aspas fazem parte da LINHA, não
+ * do valor — leitores de .env as removem. Quem copia o valor à mão, ou por
+ * script, leva as aspas junto. O resultado foi o app fechando na abertura com
+ * "Invalid supabaseUrl": a URL chegava começando com `"` em vez de `h`, e o
+ * cliente do Supabase recusa no carregamento do módulo.
+ *
+ * A barra final também sai: o supabase-js monta os endereços concatenando, e
+ * `.../supabase.co//auth/v1` já causou dor de cabeça suficiente por aí.
+ */
+function clean(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim().replace(/^["']|["']$/g, "").replace(/\/+$/, "");
+  return trimmed || undefined;
+}
+
 const extra = Constants.expoConfig?.extra ?? {};
-const url = process.env.EXPO_PUBLIC_SUPABASE_URL ?? (extra.supabaseUrl as string | undefined);
-const anonKey =
-  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? (extra.supabaseAnonKey as string | undefined);
+const url = clean(
+  process.env.EXPO_PUBLIC_SUPABASE_URL ?? (extra.supabaseUrl as string | undefined),
+);
+const anonKey = clean(
+  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? (extra.supabaseAnonKey as string | undefined),
+);
 
 /**
  * As chaves chegaram ao binário?
@@ -39,7 +60,17 @@ const anonKey =
  * Em vez disso o app abre, esta bandeira fica falsa e a porta de entrada mostra
  * uma tela dizendo o que houve. Erro que aparece é erro que se conserta.
  */
-export const isSupabaseConfigured = Boolean(url && anonKey);
+/**
+ * Exige URL bem formada, não só presente.
+ *
+ * `Boolean(url)` sozinho não bastava: um valor sujo — com aspas, um espaço, um
+ * caminho pela metade — passava aqui e explodia dentro do `createClient`, que
+ * roda no carregamento do módulo e leva o aplicativo junto. Validar antes é o
+ * que transforma "app fecha sozinho" em "tela explicando o problema".
+ */
+export const isSupabaseConfigured = Boolean(
+  url && anonKey && /^https?:\/\/[^\s/]+/i.test(url),
+);
 
 export const SUPABASE_CONFIG_HELP =
   "As chaves do Supabase não vieram neste build.\n\n" +
@@ -59,7 +90,9 @@ export const SUPABASE_CONFIG_HELP =
  * antes, olhando `isSupabaseConfigured`.
  */
 export const supabase = createClient<Database>(
-  url || "https://placeholder.invalid",
+  // O placeholder entra sempre que a configuração não passa na validação — não
+  // só quando falta. Passar uma URL suja adiante seria devolver o crash.
+  isSupabaseConfigured ? url! : "https://placeholder.invalid",
   anonKey || "sem-chave",
   {
     auth: {
