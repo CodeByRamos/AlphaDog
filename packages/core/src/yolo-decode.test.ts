@@ -4,6 +4,7 @@ import {
   MIN_DETECTION_CONFIDENCE,
   YOLO_CHANNELS,
   YOLO_INPUT_SIZE,
+  centerCropFor,
   decodeYoloPose,
   letterboxFor,
 } from "./yolo-decode";
@@ -71,6 +72,50 @@ describe("letterboxFor", () => {
   it("dimensão zero não gera NaN", () => {
     const lb = letterboxFor(0, 0);
     expect(Number.isFinite(lb.scale)).toBe(true);
+  });
+});
+
+describe("centerCropFor", () => {
+  /**
+   * O que realmente importa não é o valor de scale ou pad isolado, e sim o
+   * trajeto de volta: um ponto no espaço do modelo tem que cair no pixel certo
+   * do frame. É essa conta que o decode faz, então é essa que o teste faz.
+   */
+  const toFrame = (m: number, pad: number, scale: number) => (m - pad) / scale;
+
+  it("frame quadrado é identidade", () => {
+    const c = centerCropFor(640, 640);
+    expect(c.scale).toBe(1);
+    expect(c.padX).toBe(0);
+    expect(c.padY).toBe(0);
+  });
+
+  it("frame deitado descarta as laterais e mantém a altura inteira", () => {
+    // 1280x720: quadrado de 720 no centro, começando em x=280.
+    const c = centerCropFor(1280, 720);
+    expect(toFrame(0, c.padX, c.scale)).toBeCloseTo(280);
+    expect(toFrame(640, c.padX, c.scale)).toBeCloseTo(1000);
+    expect(toFrame(0, c.padY, c.scale)).toBeCloseTo(0);
+    expect(toFrame(640, c.padY, c.scale)).toBeCloseTo(720);
+  });
+
+  it("frame em pé descarta topo e base", () => {
+    const c = centerCropFor(720, 1280);
+    expect(toFrame(0, c.padY, c.scale)).toBeCloseTo(280);
+    expect(toFrame(640, c.padY, c.scale)).toBeCloseTo(1000);
+    expect(toFrame(0, c.padX, c.scale)).toBeCloseTo(0);
+  });
+
+  it("a proporção é preservada: um quadrado no modelo é um quadrado no frame", () => {
+    const c = centerCropFor(1280, 720);
+    const w = toFrame(400, c.padX, c.scale) - toFrame(200, c.padX, c.scale);
+    const h = toFrame(400, c.padY, c.scale) - toFrame(200, c.padY, c.scale);
+    expect(w).toBeCloseTo(h);
+  });
+
+  it("dimensão zero não gera NaN", () => {
+    const c = centerCropFor(0, 0);
+    expect(Number.isFinite(c.scale)).toBe(true);
   });
 });
 

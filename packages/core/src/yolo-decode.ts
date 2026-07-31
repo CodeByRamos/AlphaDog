@@ -53,6 +53,42 @@ export function letterboxFor(
 }
 
 /**
+ * Mapeamento para quando o frame entra no modelo por RECORTE CENTRAL quadrado,
+ * e não por letterbox.
+ *
+ * É o que o vision-camera-resize-plugin faz ao receber um alvo 1:1: ele corta o
+ * maior quadrado central e escala. Não existe barra cinza — existe deslocamento.
+ *
+ * A fórmula do decode é `frame = (modelo - pad) / escala`. Recorte é
+ * `frame = origem + modelo * lado / tamanho`. As duas coincidem com
+ * `escala = tamanho / lado` e `pad = -origem * escala`, e é por isso que o pad
+ * aqui é negativo: ele não representa margem adicionada, e sim pixel removido.
+ *
+ * Reaproveitar o mesmo tipo evita um segundo caminho de decodificação — e um
+ * segundo lugar para errar coordenada, que é o erro que não dá crash e portanto
+ * passa despercebido.
+ */
+export function centerCropFor(
+  frameWidth: number,
+  frameHeight: number,
+  size = YOLO_INPUT_SIZE,
+): Letterbox {
+  if (frameWidth <= 0 || frameHeight <= 0) return { scale: 1, padX: 0, padY: 0 };
+  const side = Math.min(frameWidth, frameHeight);
+  const scale = size / side;
+  const cutX = Math.floor((frameWidth - side) / 2);
+  const cutY = Math.floor((frameHeight - side) / 2);
+  // O ternário existe só para não devolver -0 quando não há corte: -0 passa em
+  // qualquer comparação numérica e falha em Object.is, o tipo de detalhe que
+  // envenena teste e comparação de igualdade sem nunca dar erro visível.
+  return {
+    scale,
+    padX: cutX === 0 ? 0 : -cutX * scale,
+    padY: cutY === 0 ? 0 : -cutY * scale,
+  };
+}
+
+/**
  * Confiança mínima para considerar que há um cão no quadro.
  *
  * Abaixo disso devolvemos null: "não vi cão" é resposta honesta e o

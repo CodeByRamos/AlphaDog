@@ -1,7 +1,7 @@
 import type { Detection, Exercise, SessionState } from "@alphadog/core";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, {
   FadeIn,
@@ -17,6 +17,7 @@ import { Camera, useCameraDevice, useCameraPermission } from "react-native-visio
 import { Button } from "../../components/Button";
 import { color, duration, easing, radius, space, type } from "../../theme";
 import type { DetectorStatus } from "../../vision/detector";
+import { beginVisionSession, endVisionSession } from "../../vision/pixelPathGuard";
 import { usePoseFrameProcessor } from "../../vision/usePoseFrameProcessor";
 import { DogOutline } from "./DogOutline";
 import { ScanOverlay } from "./ScanOverlay";
@@ -47,10 +48,36 @@ type Props = {
   tone: Tone;
 };
 
+/**
+ * A análise automática está liberada nesta sessão?
+ *
+ * `null` enquanto a trava consulta o disco. Montar a câmera antes da resposta
+ * anularia a proteção: o processo poderia morrer no primeiro frame sem que a
+ * marca tivesse sido gravada, e o laço de crash continuaria.
+ */
+function useVisionAllowed(): boolean | null {
+  const [allowed, setAllowed] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    void beginVisionSession().then((ok) => {
+      if (alive) setAllowed(ok);
+    });
+    // Desmontar a tela é a prova de saída limpa: o processo chegou vivo até
+    // aqui, com a câmera aberta o tempo todo.
+    return () => {
+      alive = false;
+      void endVisionSession();
+    };
+  }, []);
+
+  return allowed;
+}
+
 export function CameraStage({
   exercise,
   dogName,
-  detector,
+  detector: rawDetector,
   state,
   onFinish,
   onMarkSuccess,
@@ -61,6 +88,22 @@ export function CameraStage({
   const insets = useSafeAreaInsets();
   const { hasPermission, requestPermission } = useCameraPermission();
   const device = useCameraDevice("back");
+  const visionAllowed = useVisionAllowed();
+  const [cameraError, setCameraError] = useState<string | null>(null);
+
+  // Com a trava acionada, o app se comporta como se o modelo não existisse —
+  // um estado que a tela já sabe apresentar, com os passos do exercício e o
+  // botão de marcar acerto. A alternativa seria tentar de novo e fechar de novo.
+  const detector: DetectorStatus =
+    visionAllowed === true
+      ? rawDetector
+      : {
+          kind: "unavailable",
+          reason:
+            visionAllowed === null
+              ? "preparando"
+              : "reconhecimento automático desligado após falhas seguidas neste aparelho",
+        };
 
   const scan = useScanPhase(detector.kind === "ready");
   // Dimensões do frame, para o contorno cair sobre o cão na tela. Num ref: muda
@@ -177,15 +220,37 @@ export function CameraStage({
     );
   }
 
+  // Falha vinda do nativo — câmera em uso por outro app, permissão revogada no
+  // meio, hardware ocupado. Mostrar é melhor que tela preta: o tutor decide se
+  // tenta de novo ou volta.
+  if (cameraError) {
+    return (
+      <Blocked
+        icon="alert-circle-outline"
+        title="A câmera não abriu"
+        body={`${cameraError}\n\nFeche outros aplicativos que usem a câmera e tente novamente.`}
+        action={{ label: "Tentar de novo", onPress: () => setCameraError(null) }}
+        onClose={() => onFinish(false)}
+      />
+    );
+  }
+
   return (
     <View style={styles.root}>
       <Camera
         style={StyleSheet.absoluteFill}
         device={device}
         isActive
+        // Explícito de propósito. É o formato que o CameraX entrega nativamente
+        // e o que o resize-plugin converte com libyuv; pedir "rgb" obrigaria o
+        // CameraX a converter antes, num aparelho de entrada, sem ganho algum.
+        pixelFormat="yuv"
         // Sem modelo carregado o processor fica de fora: ligá-lo só gastaria
         // bateria copiando frames para lugar nenhum.
         frameProcessor={frameProcessor}
+        // Erro de câmera sem tratador é erro que vira tela preta silenciosa. Com
+        // ele o tutor entende que o treino continua no botão.
+        onError={(e) => setCameraError(e.message)}
       />
 
       {/* Contorno sobre o cão real. Fica visível também durante o treino: é a

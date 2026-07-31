@@ -1,63 +1,59 @@
 import {
   YOLO_INPUT_SIZE,
+  centerCropFor,
   decodeYoloPose,
-  letterboxFor,
   type Detection,
 } from "@alphadog/core";
 import { useMemo } from "react";
+import type { TfliteModel } from "react-native-fast-tflite";
+import { NitroModules, type BoxedHybridObject } from "react-native-nitro-modules";
 import { useFrameProcessor, type Frame } from "react-native-vision-camera";
+import { Worklets } from "react-native-worklets-core";
+import { createResizePlugin } from "vision-camera-resize-plugin";
 import type { DetectorStatus } from "./detector";
 
 /**
  * Processa cada frame da câmera e devolve a detecção para o JS.
  *
  * Roda em worklet, na thread da câmera: o buffer do frame nunca cruza a ponte,
- * só o resultado já decodificado. Copiar imagem 30 vezes por segundo para o JS
- * derrubaria o FPS antes de o modelo virar gargalo.
+ * só o resultado já decodificado.
  *
- * O redimensionamento é feito à mão, e não com vision-camera-resize-plugin —
- * uma dependência a menos numa pilha que já tem runtime nativo demais.
+ * DUAS REGRAS DA VISIONCAMERA v4 GOVERNAM ESTE ARQUIVO, e violar qualquer uma
+ * delas não dá exceção de JavaScript — dá processo morto:
+ *
+ * 1. O modelo do react-native-fast-tflite é um HybridObject do Nitro, apoiado
+ *    em `jsi::NativeState`. O runtime de worklet da VisionCamera v4 NÃO acessa
+ *    NativeState. É preciso encaixotar com `NitroModules.box()` na thread de JS
+ *    e desencaixotar dentro do worklet. Capturar o modelo direto, como estava
+ *    aqui, derruba o app no primeiro frame — ou seja, no instante exato em que
+ *    o tutor concede a câmera. O próprio README do fast-tflite diz isso.
+ *
+ * 2. `frame.toArrayBuffer()` no Android exige HardwareBuffer e devolve os bytes
+ *    NO FORMATO DO FRAME, que por padrão é YUV 4:2:0 — não RGBA. O código
+ *    anterior lia como RGBA, com passo de 4 bytes e ignorando `bytesPerRow`.
+ *    Além de produzir entrada sem sentido para o modelo, a chamada atravessa
+ *    JNI, e exceção Java ali vira exceção C++ dentro de uma host function JSI:
+ *    aborta o processo, sem passar por nenhum try/catch de JavaScript.
+ *
+ * Por isso a conversão de pixels saiu do JavaScript e voltou para o
+ * vision-camera-resize-plugin, que é a peça que o próprio fast-tflite indica.
+ * Ele resolve YUV, stride, rotação e escala em nativo (libyuv) e entrega
+ * float32 já normalizado em 0..1 — a faixa que o modelo espera.
+ *
+ * Ter removido esse plugin foi economia falsa: as linhas de laço de pixel que
+ * ele evitava eram exatamente as que fechavam o aplicativo.
  */
-
-/**
- * Runtime de worklet da VisionCamera, carregado com proteção.
- *
- * A VisionCamera exige `react-native-worklets-core` para frame processors, e
- * LANÇA ao receber um frameProcessor sem ele — matando o app no instante em que
- * a câmera fica pronta. Foi exatamente o que aconteceu:
- *
- *   Frame Processors are not available, react-native-worklets-core is not installed!
- *   FATAL EXCEPTION: mqt_v_native
- *
- * Resolver aqui, uma vez, permite decidir ANTES de entregar o processor à
- * câmera. Sem o runtime, a sessão roda sem análise automática — o tutor marca o
- * acerto no botão, como sempre pôde. Recurso ausente vira funcionalidade a
- * menos, nunca aplicativo fechando.
- */
-type WorkletsModule = {
-  Worklets: { createRunOnJS: <T extends (...args: never[]) => void>(fn: T) => T };
-};
-
-const workletsCore: WorkletsModule | null = (() => {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const mod = require("react-native-worklets-core") as WorkletsModule;
-    return typeof mod?.Worklets?.createRunOnJS === "function" ? mod : null;
-  } catch {
-    return null;
-  }
-})();
-
-/** Frame processors funcionam neste build? A câmera consulta antes de usar. */
-export const frameProcessorsAvailable = workletsCore !== null;
 
 /**
  * Um frame a cada três.
  *
  * O cão não muda de postura em 33ms, e o RepTracker já exige acordo em 3 de 5
- * leituras. Processar todo frame gastaria bateria sem melhorar a decisão — e
- * aqui, com o redimensionamento em JavaScript, também sobraria menos tempo por
- * quadro.
+ * leituras. Processar todo frame gastaria bateria sem melhorar a decisão.
+ *
+ * A contagem vem de um objeto capturado pelo worklet, e não de
+ * `frame.timestamp % 3`: timestamp é nanossegundo de relógio monotônico, então
+ * o resto era pseudoaleatório — descartava frames de forma irregular em vez de
+ * um a cada três.
  */
 const FRAME_SKIP = 3;
 
@@ -77,78 +73,83 @@ export function usePoseFrameProcessor(
     frameHeight: number,
   ) => void,
 ) {
-  // A ponte worklet -> JS precisa vir do MESMO runtime que executa o worklet.
-  // Misturar com o runOnJS do Reanimated cruzaria dois runtimes distintos.
-  const emit = useMemo(
-    () => (workletsCore ? workletsCore.Worklets.createRunOnJS(onDetection) : null),
-    [onDetection],
-  );
+  // O plugin lança se o módulo nativo não estiver no binário. Aqui isso vira
+  // ausência de recurso, e não tela de erro: o treino segue com o tutor
+  // marcando o acerto, que é como o app já se comporta sem modelo.
+  const resize = useMemo(() => {
+    try {
+      return createResizePlugin().resize;
+    } catch {
+      return null;
+    }
+  }, []);
 
   const model = detector.kind === "ready" ? detector.model : null;
-  const enabled = model != null && emit != null;
+
+  // Regra 1: encaixotar na thread de JS, desencaixotar dentro do worklet.
+  const boxedModel = useMemo<BoxedHybridObject<TfliteModel> | null>(
+    () => (model ? NitroModules.box(model) : null),
+    [model],
+  );
+
+  // A ponte worklet -> JS vem do runtime da VisionCamera, que é o mesmo que
+  // executa este worklet. Misturar com o runOnJS do Reanimated cruzaria dois
+  // runtimes distintos.
+  const emit = useMemo(() => Worklets.createRunOnJS(onDetection), [onDetection]);
+
+  // Contador de descarte. Vive num objeto porque o worklet captura a referência
+  // uma vez e a mantém entre invocações — variável solta seria recopiada.
+  const counter = useMemo(() => ({ n: 0 }), []);
+
+  const enabled = boxedModel != null && resize != null;
 
   const processor = useFrameProcessor(
     (frame: Frame) => {
       "worklet";
-      if (!enabled) return;
-      if (frame.timestamp % FRAME_SKIP !== 0) return;
+      if (!enabled || boxedModel == null || resize == null) return;
+
+      counter.n = (counter.n + 1) % FRAME_SKIP;
+      if (counter.n !== 0) return;
 
       try {
-        // Pixels crus do frame. VisionCamera entrega RGBA de 8 bits por canal.
-        const raw = frame.toArrayBuffer();
-        const pixels = new Uint8Array(raw);
+        // Recorte central quadrado + escala para 640x640, em RGB float32
+        // normalizado, tudo em nativo. Sem `crop` explícito o plugin corta o
+        // maior quadrado central para casar a proporção 1:1 do alvo — que é
+        // justamente o que preserva a razão de aspecto do cão.
+        const resized = resize(frame, {
+          scale: { width: YOLO_INPUT_SIZE, height: YOLO_INPUT_SIZE },
+          pixelFormat: "rgb",
+          dataType: "float32",
+        });
 
-        const fw = frame.width;
-        const fh = frame.height;
-        const size = YOLO_INPUT_SIZE;
-
-        // Encaixe proporcional com barras cinza — o mesmo pré-processamento do
-        // treino. Esticar mudaria a razão de aspecto da caixa, justamente o
-        // sinal que separa sentado de em pé.
-        const scale = Math.min(size / fw, size / fh);
-        const drawW = Math.round(fw * scale);
-        const drawH = Math.round(fh * scale);
-        const padX = Math.floor((size - drawW) / 2);
-        const padY = Math.floor((size - drawH) / 2);
-
-        // NCHW normalizado, o formato que o modelo declara.
-        const input = new Float32Array(3 * size * size);
-        const plane = size * size;
-        // 114/255: o cinza de preenchimento usado no treino.
-        input.fill(114 / 255);
-
-        for (let y = 0; y < drawH; y++) {
-          // Vizinho mais próximo: interpolar custaria três vezes mais por pixel,
-          // e o modelo foi treinado com imagens redimensionadas, não com
-          // qualidade fotográfica.
-          const srcY = Math.min(fh - 1, Math.floor(y / scale));
-          const rowOut = (y + padY) * size + padX;
-          const rowIn = srcY * fw;
-
-          for (let x = 0; x < drawW; x++) {
-            const srcX = Math.min(fw - 1, Math.floor(x / scale));
-            const i = (rowIn + srcX) * 4; // RGBA
-            const o = rowOut + x;
-            input[o] = pixels[i]! / 255;
-            input[plane + o] = pixels[i + 1]! / 255;
-            input[2 * plane + o] = pixels[i + 2]! / 255;
-          }
+        // O modelo declara NCHW; o plugin entrega HWC intercalado. A
+        // transposição é o único trabalho por pixel que sobra em JavaScript.
+        const plane = YOLO_INPUT_SIZE * YOLO_INPUT_SIZE;
+        const input = new Float32Array(3 * plane);
+        for (let p = 0, s = 0; p < plane; p++, s += 3) {
+          input[p] = resized[s]!;
+          input[plane + p] = resized[s + 1]!;
+          input[2 * plane + p] = resized[s + 2]!;
         }
 
-        const outputs = model!.runSync([input.buffer as ArrayBuffer]);
+        const tflite = boxedModel.unbox();
+        const outputs = tflite.runSync([input.buffer as ArrayBuffer]);
         const scores = new Float32Array(outputs[0]!);
 
-        const detection = decodeYoloPose(scores, letterboxFor(fw, fh));
-        emit!(detection, frame.timestamp / 1e9, fw, fh);
+        const detection = decodeYoloPose(
+          scores,
+          centerCropFor(frame.width, frame.height),
+        );
+        emit(detection, frame.timestamp / 1e9, frame.width, frame.height);
       } catch {
         // Frame ruim não derruba a sessão. Perder uma leitura custa uma
         // repetição; travar a câmera custa o treino inteiro.
       }
     },
-    [enabled, model, emit],
+    [enabled, boxedModel, resize, emit, counter],
   );
 
-  // undefined quando não há o que processar: entregar um processor à câmera sem
-  // o runtime nativo é o que a fazia lançar e fechar o aplicativo.
+  // undefined quando não há modelo: entregar um processor à câmera sem ter o
+  // que rodar só gastaria bateria copiando frames para lugar nenhum.
   return enabled ? processor : undefined;
 }
