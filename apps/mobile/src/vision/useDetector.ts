@@ -1,3 +1,4 @@
+import { Asset } from "expo-asset";
 import { useEffect, useState } from "react";
 import { Platform } from "react-native";
 import type { DetectorStatus } from "./detector";
@@ -26,6 +27,63 @@ const DELEGATE_CHAIN: string[][] = Platform.select({
 /** Nome legível do acelerador, para o log do aparelho e para a UI. */
 function delegateLabel(delegates: string[]): string {
   return delegates.length > 0 ? delegates.join("+") : "cpu";
+}
+
+/**
+ * Primeira linha do erro, curta o bastante para caber numa tela.
+ *
+ * A mensagem completa de uma exceção do Kotlin traz a pilha inteira, e ela foi
+ * parar na tela de treino: dezenas de linhas de `at kotlinx.coroutines...`
+ * cobrindo as instruções do exercício. Diagnóstico pertence ao log; a tela
+ * recebe a causa, uma linha.
+ */
+function headline(message: string): string {
+  const first = message.split("\n")[0]?.trim() ?? message;
+  return first.length > 140 ? `${first.slice(0, 140)}…` : first;
+}
+
+/**
+ * Endereço do arquivo do modelo, com protocolo.
+ *
+ * O carregador nativo do fast-tflite faz literalmente `URL(path).readBytes()`.
+ * Ele precisa de um endereço COM esquema, e é aí que estava a falha:
+ *
+ *   java.net.MalformedURLException: no protocol: assets_models_dogpose
+ *     at com.margelo.nitro.tflite.HybridAssetLoader.loadAsset
+ *
+ * Passar o `require()` direto funciona em desenvolvimento porque o Metro serve
+ * o arquivo por HTTP e `Image.resolveAssetSource()` devolve
+ * `http://10.0.2.2:8081/assets/...`. No APK de produção não há servidor: o
+ * arquivo vira RECURSO do Android e a mesma chamada devolve só o nome dele,
+ * `assets_models_dogpose`, sem esquema nenhum. O `URL()` recusa, e o app dizia
+ * que o motor de visão tinha recusado o modelo — quando na verdade nunca
+ * chegou a ler o arquivo.
+ *
+ * O expo-asset resolve nos dois mundos: `downloadAsync()` copia o recurso
+ * embutido para o cache do aplicativo e devolve um `file://` de verdade. Em
+ * desenvolvimento, baixa do Metro e devolve `file://` também.
+ */
+async function resolveModelUrl(): Promise<string> {
+  const asset = Asset.fromModule(
+    // require() é obrigatório: é ele que faz o Metro empacotar o .tflite como
+    // asset nativo. import estático não registra o arquivo.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require("../../assets/models/dogpose.tflite"),
+  );
+
+  if (!asset.localUri) await asset.downloadAsync();
+
+  const uri = asset.localUri ?? asset.uri;
+
+  // Verificação explícita em vez de confiança: se um dia o expo-asset devolver
+  // um caminho sem esquema, quero a mensagem aqui e não uma pilha de Java na
+  // tela do tutor.
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(uri)) {
+    throw new Error(`endereço sem protocolo: ${uri}`);
+  }
+
+  console.log(`[AlphaDog] arquivo do modelo em ${uri}`);
+  return uri;
 }
 
 /**
@@ -61,10 +119,18 @@ export function useDetector(): DetectorStatus {
         return;
       }
 
-      // require() é obrigatório: é ele que faz o Metro empacotar o .tflite como
-      // asset nativo. import estático não registra o arquivo.
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const source = require("../../assets/models/dogpose.tflite");
+      let source: { url: string };
+      try {
+        source = { url: await resolveModelUrl() };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.log(`[AlphaDog] não consegui localizar o arquivo do modelo: ${message}`);
+        setStatus({
+          kind: "unavailable",
+          reason: "Não foi possível abrir o arquivo do modelo neste aparelho.",
+        });
+        return;
+      }
 
       let lastError = "";
 
@@ -105,7 +171,7 @@ export function useDetector(): DetectorStatus {
         kind: "unavailable",
         reason: lastError.toLowerCase().includes("not found")
           ? "O arquivo do modelo não veio neste build."
-          : `O motor de visão recusou o modelo neste aparelho (${lastError}).`,
+          : `O motor de visão recusou o modelo neste aparelho: ${headline(lastError)}`,
       });
     })();
 
