@@ -15,17 +15,24 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
  * A trava quebra o laço observando o que só se sabe depois: a sessão anterior
  * terminou por vontade do usuário ou porque o processo morreu?
  *
- *   `begin()` grava a marca ANTES de a câmera ligar.
- *   `end()` apaga a marca quando a tela é desmontada normalmente.
+ *   `beginVisionSession()` grava a marca ANTES de a câmera ligar.
+ *   `markVisionAlive()` apaga a marca no PRIMEIRO frame analisado com sucesso.
+ *   `endVisionSession()` apaga a marca quando a tela fecha normalmente.
  *
- * Marca encontrada na abertura significa que o processo morreu com a câmera no
- * ar. Duas dessas seguidas e a análise automática é desligada para sempre neste
- * aparelho: o treino continua funcionando, com o tutor marcando o acerto no
- * botão, que é como o app já funciona quando o modelo não carrega.
+ * O primeiro frame é o que realmente importa, e a primeira versão desta trava
+ * não o observava — apagava a marca só no desmonte. Isso punia o inocente: o
+ * tutor que sai do app pelo botão de recentes, ou o Android recuperando memória
+ * em segundo plano, contavam como falha. Duas dessas e o reconhecimento
+ * desligava sozinho, com tudo funcionando.
  *
- * Duas, e não uma: uma morte pode ser o sistema recuperando memória, o tutor
- * matando o app pela lista de recentes, ou a bateria acabando. Duas seguidas,
- * sem nenhuma sessão inteira no meio, é padrão.
+ * Um frame analisado prova que o caminho nativo inteiro sobreviveu: conversão
+ * de pixels, inferência e volta para o JavaScript. Depois disso nada mais conta
+ * contra. A janela que a trava observa passa a ser só aquela em que a falha
+ * realmente acontece — entre ligar a câmera e o primeiro resultado.
+ *
+ * Duas mortes, e não uma: a primeira pode ser o sistema sem memória ou a
+ * bateria acabando. Duas seguidas, sem um único frame analisado no meio, é
+ * padrão.
  */
 
 const KEY = "alphadog.vision.unclean-exits.v1";
@@ -71,17 +78,35 @@ export async function beginVisionSession(): Promise<boolean> {
   return true;
 }
 
-/**
- * A tela de treino fechou por vontade do usuário.
- *
- * Zera a contagem: o que a trava procura são mortes SEGUIDAS. Uma sessão que
- * chega ao fim prova que o caminho de visão funciona neste aparelho.
- */
-export async function endVisionSession(): Promise<void> {
+async function clear(): Promise<void> {
   uncleanExits = 0;
   try {
     await AsyncStorage.removeItem(KEY);
   } catch {
-    // Idem: a próxima abertura apenas contará uma morte a mais do que houve.
+    // A próxima abertura apenas contará uma morte a mais do que houve.
   }
+}
+
+/**
+ * Um frame foi analisado do começo ao fim.
+ *
+ * Conversão de pixels, inferência e retorno ao JavaScript: o caminho nativo
+ * inteiro sobreviveu. É a prova mais forte disponível, e é o que zera a
+ * contagem. Chamada a cada detecção, mas o trabalho acontece uma vez só.
+ */
+export function markVisionAlive(): void {
+  if (uncleanExits === 0 && loaded) return;
+  loaded = true;
+  void clear();
+}
+
+/**
+ * A tela de treino fechou por vontade do usuário.
+ *
+ * Também zera: o processo chegou vivo até o desmonte. Cobre a sessão curta
+ * demais para produzir um frame — sem isso, abrir e fechar o treino duas vezes
+ * seguidas desligaria o reconhecimento sem nenhuma falha ter acontecido.
+ */
+export async function endVisionSession(): Promise<void> {
+  await clear();
 }

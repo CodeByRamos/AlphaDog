@@ -44,7 +44,20 @@ export type DetectorStatus =
    * do frame processor (worklet) — ele precisa do objeto, não de um método que
    * cruzaria a ponte a 30 vezes por segundo.
    */
-  | { kind: "ready"; detector: DogDetector; model: TfliteModel }
+  | {
+      kind: "ready";
+      detector: DogDetector;
+      model: TfliteModel;
+      /**
+       * Qual acelerador aceitou o modelo: "android-gpu", "core-ml" ou "cpu".
+       *
+       * Sobe até a tela porque o tutor precisa poder ver que a IA está ligada.
+       * "Parece que não tem IA" foi relatado com o modelo carregando
+       * normalmente — sem indicador visível, funcionar e não funcionar têm a
+       * mesma aparência.
+       */
+      accelerator: string;
+    }
   /**
    * Sem modelo disponível. Estado legítimo, não erro: o app roda, mostra os
    * passos do exercício e conta as repetições manualmente. O que ele NÃO faz é

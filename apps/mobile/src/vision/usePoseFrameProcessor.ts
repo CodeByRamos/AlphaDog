@@ -72,6 +72,14 @@ export function usePoseFrameProcessor(
     frameWidth: number,
     frameHeight: number,
   ) => void,
+  /**
+   * A trava de laço de crash liberou a análise nesta sessão?
+   *
+   * Vem de fora porque a decisão depende do disco, e o disco é assíncrono: ler
+   * aqui dentro faria o primeiro render entregar um processor que talvez não
+   * devesse existir.
+   */
+  allowed: boolean,
 ) {
   // O plugin lança se o módulo nativo não estiver no binário. Aqui isso vira
   // ausência de recurso, e não tela de erro: o treino segue com o tutor
@@ -101,7 +109,7 @@ export function usePoseFrameProcessor(
   // uma vez e a mantém entre invocações — variável solta seria recopiada.
   const counter = useMemo(() => ({ n: 0 }), []);
 
-  const enabled = boxedModel != null && resize != null;
+  const enabled = allowed && boxedModel != null && resize != null;
 
   const processor = useFrameProcessor(
     (frame: Frame) => {

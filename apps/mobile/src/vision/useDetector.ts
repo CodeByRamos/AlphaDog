@@ -4,17 +4,29 @@ import type { DetectorStatus } from "./detector";
 import { getTfliteRuntime } from "./tflite";
 
 /**
- * Acelerador por plataforma.
+ * Aceleradores a tentar, EM ORDEM, até um funcionar.
  *
- * Passar `android-gpu` no iPhone (ou `core-ml` no Android) faz o runtime tentar
- * um delegate que não existe naquele sistema. Cada plataforma recebe só o que
- * ela tem; sem delegate disponível, a lib usa a CPU sozinha.
+ * A lista é uma cadeia de tentativas, e não uma escolha única. O motivo é
+ * concreto: o delegate de GPU do TFLite exige OpenCL ou OpenGL ES 3.1 e não
+ * cobre bem modelos quantizados. Num aparelho de entrada — um Moto G05, por
+ * exemplo — `createModel` com `android-gpu` falha, e a versão anterior deste
+ * arquivo tratava isso como "sem modelo de visão". O aplicativo então mostrava
+ * a tela de marcação manual, com o modelo intacto dentro do APK e o motor
+ * nativo funcionando: um recurso pronto, desligado por um acelerador opcional.
+ *
+ * A CPU entra por último e sempre existe. Ela é mais lenta, e mais lenta é
+ * incomparavelmente melhor que ausente — ainda mais com um frame a cada três.
  */
-const DELEGATES = Platform.select({
-  ios: ["core-ml"],
-  android: ["android-gpu"],
-  default: [] as string[],
-});
+const DELEGATE_CHAIN: string[][] = Platform.select({
+  ios: [["core-ml"], []],
+  android: [["android-gpu"], []],
+  default: [[]],
+}) as string[][];
+
+/** Nome legível do acelerador, para o log do aparelho e para a UI. */
+function delegateLabel(delegates: string[]): string {
+  return delegates.length > 0 ? delegates.join("+") : "cpu";
+}
 
 /**
  * Carrega o modelo de pose canina, se este build tiver o runtime nativo.
@@ -49,39 +61,52 @@ export function useDetector(): DetectorStatus {
         return;
       }
 
-      try {
-        const model = await runtime.loadTensorflowModel(
-          // require() é obrigatório: é ele que faz o Metro empacotar o .tflite
-          // como asset nativo. import estático não registra o arquivo.
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          require("../../assets/models/dogpose.tflite"),
-          DELEGATES,
-        );
+      // require() é obrigatório: é ele que faz o Metro empacotar o .tflite como
+      // asset nativo. import estático não registra o arquivo.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const source = require("../../assets/models/dogpose.tflite");
 
-        if (!alive) return;
+      let lastError = "";
 
-        setStatus({
-          kind: "ready",
-          model,
-          detector: {
-            name: "dogpose-yolo11n",
-            load: async () => {},
-            // A inferência roda no frame processor, em worklet, com acesso
-            // direto ao buffer do frame. Este método existe para o contrato.
-            detect: () => null,
-            dispose: () => {},
-          },
-        });
-      } catch (error) {
-        if (!alive) return;
-        const message = error instanceof Error ? error.message : String(error);
-        setStatus({
-          kind: "unavailable",
-          reason: message.toLowerCase().includes("not found")
-            ? "O modelo de visão não está neste build do app."
-            : "Não foi possível carregar o modelo de visão neste aparelho.",
-        });
+      for (const delegates of DELEGATE_CHAIN) {
+        const label = delegateLabel(delegates);
+        try {
+          const model = await runtime.loadTensorflowModel(source, delegates);
+          if (!alive) return;
+
+          // Log deliberado, e mantido em produção. Quando o reconhecimento
+          // some no aparelho de alguém, esta linha é a diferença entre saber e
+          // adivinhar — e adivinhar já custou várias builds neste projeto.
+          console.log(`[AlphaDog] modelo de visão carregado — acelerador: ${label}`);
+
+          setStatus({
+            kind: "ready",
+            accelerator: label,
+            model,
+            detector: {
+              name: "dogpose-yolo11n",
+              load: async () => {},
+              // A inferência roda no frame processor, em worklet, com acesso
+              // direto ao buffer do frame. Este método existe para o contrato.
+              detect: () => null,
+              dispose: () => {},
+            },
+          });
+          return;
+        } catch (error) {
+          if (!alive) return;
+          lastError = error instanceof Error ? error.message : String(error);
+          console.log(`[AlphaDog] acelerador ${label} recusou o modelo: ${lastError}`);
+        }
       }
+
+      console.log(`[AlphaDog] nenhum acelerador carregou o modelo: ${lastError}`);
+      setStatus({
+        kind: "unavailable",
+        reason: lastError.toLowerCase().includes("not found")
+          ? "O arquivo do modelo não veio neste build."
+          : `O motor de visão recusou o modelo neste aparelho (${lastError}).`,
+      });
     })();
 
     return () => {

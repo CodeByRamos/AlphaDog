@@ -31,9 +31,17 @@ export function useScanPhase(visionActive: boolean) {
   const [detection, setDetection] = useState<Detection | null>(null);
   const hits = useRef(0);
 
-  // Sem visão, nada a escanear: libera imediatamente.
+  /**
+   * Acompanha a visão nos DOIS sentidos.
+   *
+   * A versão anterior só tratava a queda: `if (!visionActive) setPhase("done")`.
+   * Como o modelo carrega de forma assíncrona, o primeiro render sempre chega
+   * com a visão inativa — a fase nascia em "done" e nunca voltava para
+   * "scanning" quando o modelo ficava pronto. A identificação do cão era
+   * pulada silenciosamente, e o treino começava sem a mira travar.
+   */
   useEffect(() => {
-    if (!visionActive) setPhase("done");
+    setPhase(visionActive ? "scanning" : "done");
   }, [visionActive]);
 
   // A confirmação tem duração fixa: é um momento de UI, não um estado que

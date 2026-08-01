@@ -17,11 +17,17 @@ import { Camera, useCameraDevice, useCameraPermission } from "react-native-visio
 import { Button } from "../../components/Button";
 import { color, duration, easing, radius, space, type } from "../../theme";
 import type { DetectorStatus } from "../../vision/detector";
-import { beginVisionSession, endVisionSession } from "../../vision/pixelPathGuard";
+import {
+  beginVisionSession,
+  endVisionSession,
+  markVisionAlive,
+} from "../../vision/pixelPathGuard";
 import { usePoseFrameProcessor } from "../../vision/usePoseFrameProcessor";
 import { DogOutline } from "./DogOutline";
 import { ScanOverlay } from "./ScanOverlay";
 import { useScanPhase } from "./useScanPhase";
+import { useVisionRate } from "./useVisionRate";
+import { VisionStatusPill } from "./VisionStatusPill";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -63,8 +69,9 @@ function useVisionAllowed(): boolean | null {
     void beginVisionSession().then((ok) => {
       if (alive) setAllowed(ok);
     });
-    // Desmontar a tela é a prova de saída limpa: o processo chegou vivo até
-    // aqui, com a câmera aberta o tempo todo.
+    // Desmontar a tela também é saída limpa: o processo chegou vivo até aqui.
+    // A prova principal, porém, é o primeiro frame analisado — ver
+    // markVisionAlive no handleFrame.
     return () => {
       alive = false;
       void endVisionSession();
@@ -77,7 +84,7 @@ function useVisionAllowed(): boolean | null {
 export function CameraStage({
   exercise,
   dogName,
-  detector: rawDetector,
+  detector,
   state,
   onFinish,
   onMarkSuccess,
@@ -90,22 +97,28 @@ export function CameraStage({
   const device = useCameraDevice("back");
   const visionAllowed = useVisionAllowed();
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const { fps, tick } = useVisionRate();
 
-  // Com a trava acionada, o app se comporta como se o modelo não existisse —
-  // um estado que a tela já sabe apresentar, com os passos do exercício e o
-  // botão de marcar acerto. A alternativa seria tentar de novo e fechar de novo.
-  const detector: DetectorStatus =
-    visionAllowed === true
-      ? rawDetector
-      : {
-          kind: "unavailable",
-          reason:
-            visionAllowed === null
-              ? "preparando"
-              : "reconhecimento automático desligado após falhas seguidas neste aparelho",
-        };
+  /**
+   * A trava desliga a ANÁLISE, não o detector.
+   *
+   * A versão anterior trocava o detector inteiro por "indisponível" enquanto a
+   * trava consultava o disco — e o disco é assíncrono, então o primeiro render
+   * sempre dizia que não havia IA. Agora o estado do modelo é sempre a verdade
+   * sobre o modelo, e a trava só decide se o frame processor entra em campo.
+   */
+  const visionBlocked = visionAllowed === false;
+  const analyzing = visionAllowed === true && detector.kind === "ready";
 
-  const scan = useScanPhase(detector.kind === "ready");
+  // Motivo em português de gente, com a causa real. O tutor não precisa saber
+  // o que é um delegate, mas precisa saber que não é falta de implementação.
+  const unavailableReason = visionBlocked
+    ? "O reconhecimento foi desligado neste aparelho depois de falhas seguidas. Reinstalar o app o reativa."
+    : detector.kind === "unavailable"
+      ? detector.reason
+      : "Preparando o reconhecimento…";
+
+  const scan = useScanPhase(analyzing);
   // Dimensões do frame, para o contorno cair sobre o cão na tela. Num ref: muda
   // uma vez por sessão e não deve provocar render a cada quadro.
   const frameSize = useRef({ width: 0, height: 0 });
@@ -115,14 +128,18 @@ export function CameraStage({
   // de permanência começaria a contar antes de o tutor estar pronto.
   const handleFrame = useCallback(
     (detection: Detection | null, timestamp: number, fw: number, fh: number) => {
+      // Chegar aqui significa que o caminho nativo inteiro sobreviveu a um
+      // frame. É a prova que desarma a trava de laço de crash.
+      markVisionAlive();
+      tick();
       frameSize.current = { width: fw, height: fh };
       scan.observe(detection);
       if (scan.ready) onFrame(detection, timestamp);
     },
-    [scan, onFrame],
+    [scan, onFrame, tick],
   );
 
-  const frameProcessor = usePoseFrameProcessor(detector, handleFrame);
+  const frameProcessor = usePoseFrameProcessor(detector, handleFrame, analyzing);
 
   useEffect(() => {
     if (!hasPermission) void requestPermission();
@@ -174,7 +191,10 @@ export function CameraStage({
           </View>
         </View>
 
-        <ModelUnavailable exercise={exercise} />
+        <ModelUnavailable
+          exercise={exercise}
+          reason="A prévia pelo navegador não roda o motor de visão — ele é nativo. No aplicativo instalado, o reconhecimento funciona."
+        />
 
         <View
           style={[styles.scrim, styles.scrimBottom, { paddingBottom: insets.bottom + space.lg }]}
@@ -255,7 +275,7 @@ export function CameraStage({
 
       {/* Contorno sobre o cão real. Fica visível também durante o treino: é a
           prova contínua, para o tutor, de que a IA continua acompanhando. */}
-      {detector.kind === "ready" && (
+      {analyzing && (
         <DogOutline
           detection={scan.detection}
           frameWidth={frameSize.current.width}
@@ -301,6 +321,18 @@ export function CameraStage({
             </View>
           )}
         </View>
+
+        {/* Estado da IA, sempre visível. É o que distingue "analisando e não
+            achou o cão" de "não tem IA aqui" — duas situações que, sem este
+            selo, têm exatamente a mesma aparência na tela. */}
+        <View style={styles.statusRow}>
+          <VisionStatusPill
+            detector={detector}
+            fps={fps}
+            confidence={scan.detection?.box.confidence ?? null}
+            blocked={visionBlocked}
+          />
+        </View>
       </View>
 
       {/* Identificação do cão. Enquanto ela não termina, o treino não começa —
@@ -314,10 +346,10 @@ export function CameraStage({
         />
       ) : (
         <>
-          {detector.kind === "ready" ? (
+          {analyzing ? (
             <FeedbackBanner text={feedbackText} tone={tone} state={state} />
           ) : (
-            <ModelUnavailable exercise={exercise} />
+            <ModelUnavailable exercise={exercise} reason={unavailableReason} />
           )}
 
           <View
@@ -407,7 +439,13 @@ function MarkSuccessButton({
  * A sessão funciona mesmo assim: câmera ligada, passos à mão, e o tutor marca o
  * acerto. É honesto e é útil — quem julga é quem está vendo o cão.
  */
-function ModelUnavailable({ exercise }: { exercise: Exercise }) {
+function ModelUnavailable({
+  exercise,
+  reason,
+}: {
+  exercise: Exercise;
+  reason: string;
+}) {
   // O passo do meio é onde o tutor trava: os primeiros são preparação, o
   // último é consolidação.
   const step = exercise.steps[1] ?? exercise.steps[0];
@@ -420,9 +458,15 @@ function ModelUnavailable({ exercise }: { exercise: Exercise }) {
         </Text>
         <Text style={[type.subheading, styles.noticeBody]}>{step?.body ?? ""}</Text>
         <View style={styles.divider} />
+        {/* Motivo concreto, e não promessa. O texto anterior dizia que o
+            reconhecimento "chega em breve" — o recurso está no aparelho, e
+            dizer o contrário transformava uma falha diagnosticável em
+            funcionalidade futura. */}
+        <Text style={[type.caption, { color: color.ink400, textAlign: "center" }]}>
+          {reason}
+        </Text>
         <Text style={[type.caption, { color: color.ink400, textAlign: "center" }]}>
           Toque em “Ele acertou” quando {exercise.name.toLowerCase()} sair.
-          O reconhecimento automático chega em breve.
         </Text>
       </View>
     </Animated.View>
@@ -540,6 +584,7 @@ const styles = StyleSheet.create({
   markBtnDone: { backgroundColor: color.sage400 },
   endBtn: { alignItems: "center", paddingVertical: space.md },
   topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  statusRow: { marginTop: space.sm, alignItems: "center" },
   closeBtn: {
     width: 38,
     height: 38,
