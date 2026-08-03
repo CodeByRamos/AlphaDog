@@ -36,6 +36,8 @@ type Props = {
   inferenceMs: number;
   /** A trava de segurança desligou a análise neste aparelho. */
   blocked: boolean;
+  /** O tutor escolheu marcar os acertos por conta própria. */
+  manual: boolean;
 };
 
 export function VisionStatusPill({
@@ -44,8 +46,16 @@ export function VisionStatusPill({
   confidence,
   inferenceMs,
   blocked,
+  manual,
 }: Props) {
-  const { icon, tint, label } = describe(detector, fps, confidence, inferenceMs, blocked);
+  const { icon, tint, label } = describe(
+    detector,
+    fps,
+    confidence,
+    inferenceMs,
+    blocked,
+    manual,
+  );
 
   return (
     <View style={[styles.pill, { borderColor: tint }]}>
@@ -63,7 +73,14 @@ function describe(
   confidence: number | null,
   inferenceMs: number,
   blocked: boolean,
+  manual: boolean,
 ): { icon: keyof typeof Ionicons.glyphMap; tint: string; label: string } {
+  // Escolha do tutor vem antes de qualquer estado técnico: quem desligou a IA
+  // de propósito não precisa ler sobre acelerador nem sobre trava de segurança.
+  if (manual) {
+    return { icon: "hand-left-outline", tint: color.ink300, label: "Modo manual" };
+  }
+
   if (blocked) {
     return {
       icon: "shield-outline",

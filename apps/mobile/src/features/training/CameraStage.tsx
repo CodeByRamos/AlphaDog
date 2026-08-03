@@ -26,6 +26,7 @@ import { usePoseFrameProcessor } from "../../vision/usePoseFrameProcessor";
 import { DogOutline } from "./DogOutline";
 import { ScanOverlay } from "./ScanOverlay";
 import { useScanPhase } from "./useScanPhase";
+import type { TrainingMode } from "./useTrainingMode";
 import { useVisionRate } from "./useVisionRate";
 import { VisionStatusPill } from "./VisionStatusPill";
 
@@ -52,6 +53,13 @@ type Props = {
   onFrame: (detection: Detection | null, timestampSeconds: number) => void;
   feedbackText: string;
   tone: Tone;
+  /**
+   * Quem julga o acerto. Vem de fora porque a máquina de estado da sessão, que
+   * vive na tela, precisa do mesmo valor — no manual ela roda com relógio
+   * próprio, já que nenhum frame chega para fazê-la avançar.
+   */
+  mode: TrainingMode;
+  onModeChange: (mode: TrainingMode) => void;
 };
 
 /**
@@ -91,6 +99,8 @@ export function CameraStage({
   onFrame,
   feedbackText,
   tone,
+  mode,
+  onModeChange,
 }: Props) {
   const insets = useSafeAreaInsets();
   const { hasPermission, requestPermission } = useCameraPermission();
@@ -108,15 +118,19 @@ export function CameraStage({
    * sobre o modelo, e a trava só decide se o frame processor entra em campo.
    */
   const visionBlocked = visionAllowed === false;
-  const analyzing = visionAllowed === true && detector.kind === "ready";
+  const manual = mode === "manual";
+  const analyzing =
+    !manual && visionAllowed === true && detector.kind === "ready";
 
   // Motivo em português de gente, com a causa real. O tutor não precisa saber
   // o que é um delegate, mas precisa saber que não é falta de implementação.
-  const unavailableReason = visionBlocked
-    ? "O reconhecimento foi desligado neste aparelho depois de falhas seguidas. Reinstalar o app o reativa."
-    : detector.kind === "unavailable"
-      ? detector.reason
-      : "Preparando o reconhecimento…";
+  const unavailableReason = manual
+    ? "Modo manual: você marca cada acerto."
+    : visionBlocked
+      ? "O reconhecimento foi desligado neste aparelho depois de falhas seguidas. Reinstalar o app o reativa."
+      : detector.kind === "unavailable"
+        ? detector.reason
+        : "Preparando o reconhecimento…";
 
   const scan = useScanPhase(analyzing);
   // Dimensões do frame, para o contorno cair sobre o cão na tela. Num ref: muda
@@ -339,6 +353,7 @@ export function CameraStage({
             confidence={bestConfidence}
             inferenceMs={inferenceMs}
             blocked={visionBlocked}
+            manual={manual}
           />
         </View>
       </View>
@@ -347,17 +362,62 @@ export function CameraStage({
           é o que dá sentido ao "a IA travou o alvo". Sem motor de visão o scan
           se resolve na hora, para não trancar o tutor fora do próprio treino. */}
       {!scan.ready ? (
-        <ScanOverlay
-          detection={scan.detection}
-          locked={scan.phase === "locked"}
-          debug={__DEV__}
-        />
+        <>
+          <ScanOverlay
+            detection={scan.detection}
+            locked={scan.phase === "locked"}
+            debug={__DEV__}
+          />
+
+          {/* A porta de saída da espera.
+              Enquanto a IA procura o cão, o treino ainda não começou e não há
+              botão de acerto na tela. Se o modelo não encontrar o animal — luz
+              ruim, cão de costas, ângulo fechado — o tutor ficaria parado numa
+              tela de espera sem nada para tocar. Este atalho resolve isso sem
+              mudar nada do caminho automático: quem for detectado normalmente
+              nunca chega a ver esta tela por tempo suficiente para usá-lo. */}
+          <View
+            style={[
+              styles.scrim,
+              styles.scrimBottom,
+              { paddingBottom: insets.bottom + space.lg },
+            ]}
+          >
+            <Pressable
+              onPress={() => onModeChange("manual")}
+              accessibilityRole="button"
+              accessibilityLabel="Treinar sem a IA"
+              style={styles.skipBtn}
+              hitSlop={8}
+            >
+              <Ionicons name="hand-left-outline" size={18} color={color.bone} />
+              <Text style={[type.label, { color: color.bone }]}>
+                Treinar sem a IA
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => onFinish(false)}
+              accessibilityRole="button"
+              style={styles.endBtn}
+              hitSlop={8}
+            >
+              <Text style={[type.label, { color: color.ink300 }]}>Encerrar sessão</Text>
+            </Pressable>
+          </View>
+        </>
       ) : (
         <>
           {analyzing ? (
             <FeedbackBanner text={feedbackText} tone={tone} state={state} />
           ) : (
-            <ModelUnavailable exercise={exercise} reason={unavailableReason} />
+            <ModelUnavailable
+              exercise={exercise}
+              reason={unavailableReason}
+              // Só quem escolheu o manual pode desfazer a escolha aqui. Quando
+              // a IA está indisponível por falha, oferecer "usar a IA" seria
+              // um botão que não cumpre o que promete.
+              onUseAi={manual ? () => onModeChange("auto") : undefined}
+            />
           )}
 
           <View
@@ -450,9 +510,12 @@ function MarkSuccessButton({
 function ModelUnavailable({
   exercise,
   reason,
+  onUseAi,
 }: {
   exercise: Exercise;
   reason: string;
+  /** Volta para o reconhecimento automático. Ausente quando ele não está disponível. */
+  onUseAi?: () => void;
 }) {
   // O passo do meio é onde o tutor trava: os primeiros são preparação, o
   // último é consolidação.
@@ -476,6 +539,19 @@ function ModelUnavailable({
         <Text style={[type.caption, { color: color.ink400, textAlign: "center" }]}>
           Toque em “Ele acertou” quando {exercise.name.toLowerCase()} sair.
         </Text>
+        {onUseAi ? (
+          <Pressable
+            onPress={onUseAi}
+            accessibilityRole="button"
+            style={styles.useAiBtn}
+            hitSlop={8}
+          >
+            <Ionicons name="eye-outline" size={16} color={color.alpha500} />
+            <Text style={[type.label, { color: color.alpha500 }]}>
+              Usar o reconhecimento
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
     </Animated.View>
   );
@@ -591,6 +667,23 @@ const styles = StyleSheet.create({
   },
   markBtnDone: { backgroundColor: color.sage400 },
   endBtn: { alignItems: "center", paddingVertical: space.md },
+  skipBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: space.sm,
+    height: 52,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: color.ink700,
+    backgroundColor: "rgba(0,0,0,0.45)",
+  },
+  useAiBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingTop: space.sm,
+  },
   topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   statusRow: { marginTop: space.sm, alignItems: "center" },
   closeBtn: {
