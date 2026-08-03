@@ -97,7 +97,7 @@ export function CameraStage({
   const device = useCameraDevice("back");
   const visionAllowed = useVisionAllowed();
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const { fps, tick } = useVisionRate();
+  const { fps, bestConfidence, inferenceMs, tick } = useVisionRate();
 
   /**
    * A trava desliga a ANÁLISE, não o detector.
@@ -127,11 +127,18 @@ export function CameraStage({
   // sessão não recebe frame durante a identificação de propósito: o cronômetro
   // de permanência começaria a contar antes de o tutor estar pronto.
   const handleFrame = useCallback(
-    (detection: Detection | null, timestamp: number, fw: number, fh: number) => {
+    (
+      detection: Detection | null,
+      timestamp: number,
+      fw: number,
+      fh: number,
+      confidence: number,
+      inferenceMs: number,
+    ) => {
       // Chegar aqui significa que o caminho nativo inteiro sobreviveu a um
       // frame. É a prova que desarma a trava de laço de crash.
       markVisionAlive();
-      tick();
+      tick(confidence, inferenceMs);
       frameSize.current = { width: fw, height: fh };
       scan.observe(detection);
       if (scan.ready) onFrame(detection, timestamp);
@@ -329,7 +336,8 @@ export function CameraStage({
           <VisionStatusPill
             detector={detector}
             fps={fps}
-            confidence={scan.detection?.box.confidence ?? null}
+            confidence={bestConfidence}
+            inferenceMs={inferenceMs}
             blocked={visionBlocked}
           />
         </View>

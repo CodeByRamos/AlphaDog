@@ -1,3 +1,4 @@
+import { MIN_DETECTION_CONFIDENCE } from "@alphadog/core";
 import { Ionicons } from "@expo/vector-icons";
 import { StyleSheet, Text, View } from "react-native";
 import { color, radius, space } from "../../theme";
@@ -23,14 +24,28 @@ type Props = {
   detector: DetectorStatus;
   /** Frames analisados por segundo, medido na própria tela. */
   fps: number;
-  /** Confiança da última detecção, ou null quando não há cão no quadro. */
+  /**
+   * Maior confiança do último segundo, MESMO ABAIXO DO LIMIAR.
+   *
+   * É o número mais importante desta tela durante o diagnóstico: perto de zero
+   * significa que o modelo não está reconhecendo nada do que recebe; perto do
+   * limiar significa que está quase, e o problema é calibragem.
+   */
   confidence: number | null;
+  /** Tempo da última inferência, em milissegundos. */
+  inferenceMs: number;
   /** A trava de segurança desligou a análise neste aparelho. */
   blocked: boolean;
 };
 
-export function VisionStatusPill({ detector, fps, confidence, blocked }: Props) {
-  const { icon, tint, label } = describe(detector, fps, confidence, blocked);
+export function VisionStatusPill({
+  detector,
+  fps,
+  confidence,
+  inferenceMs,
+  blocked,
+}: Props) {
+  const { icon, tint, label } = describe(detector, fps, confidence, inferenceMs, blocked);
 
   return (
     <View style={[styles.pill, { borderColor: tint }]}>
@@ -46,6 +61,7 @@ function describe(
   detector: DetectorStatus,
   fps: number,
   confidence: number | null,
+  inferenceMs: number,
   blocked: boolean,
 ): { icon: keyof typeof Ionicons.glyphMap; tint: string; label: string } {
   if (blocked) {
@@ -73,15 +89,19 @@ function describe(
     };
   }
 
-  // Analisando. Sem cão no quadro o FPS continua contando — é o que prova que a
-  // ausência de caixa é resultado da análise, e não falta de análise.
+  // Analisando. O FPS continua contando mesmo sem cão no quadro — é o que prova
+  // que a ausência de caixa é RESULTADO da análise, e não falta de análise.
+  //
+  // A confiança aparece sempre, inclusive abaixo do limiar. Ela é a diferença
+  // entre "o modelo olhou e não achou" e "o modelo recebeu lixo": um número que
+  // reage ao que está na frente da câmera não pode ser interface simulada.
+  const pct = confidence == null ? 0 : Math.round(confidence * 100);
+  const detected = confidence != null && confidence >= MIN_DETECTION_CONFIDENCE;
+
   return {
     icon: "eye",
-    tint: confidence == null ? color.alpha500 : color.sage400,
-    label:
-      confidence == null
-        ? `IA analisando · ${fps} fps · procurando`
-        : `IA analisando · ${fps} fps · cão ${Math.round(confidence * 100)}%`,
+    tint: detected ? color.sage400 : color.alpha500,
+    label: `IA ${fps} fps · ${inferenceMs}ms · ${detected ? "cão" : "melhor"} ${pct}%`,
   };
 }
 

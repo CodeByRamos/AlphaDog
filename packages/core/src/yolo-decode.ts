@@ -106,11 +106,37 @@ export const MIN_DETECTION_CONFIDENCE = 0.5;
  * `output` é o tensor achatado em ordem canais-primeiro: o valor do canal c na
  * âncora a está em `output[c * anchors + a]`.
  */
+/**
+ * Resultado com o número que o `null` esconde.
+ *
+ * `decodeYoloPose` devolve `null` tanto quando o modelo não viu nada (melhor
+ * âncora em 0,001) quanto quando quase viu (0,49 contra um limiar de 0,50). São
+ * situações opostas — a primeira é entrada errada chegando ao modelo, a segunda
+ * é limiar mal calibrado — e do lado de fora as duas têm exatamente a mesma
+ * aparência: tela sem caixa.
+ *
+ * Foi essa ambiguidade que fez o aplicativo parecer "IA simulada". A confiança
+ * bruta sobe para a interface e resolve a dúvida sem uma única build de teste.
+ */
+export type DecodeResult = {
+  detection: Detection | null;
+  /** Confiança da melhor âncora, mesmo abaixo do limiar. */
+  confidence: number;
+};
+
 export function decodeYoloPose(
   output: ArrayLike<number>,
   letterbox: Letterbox,
   anchors = 8400,
 ): Detection | null {
+  return decodeYoloPoseDetailed(output, letterbox, anchors).detection;
+}
+
+export function decodeYoloPoseDetailed(
+  output: ArrayLike<number>,
+  letterbox: Letterbox,
+  anchors = 8400,
+): DecodeResult {
   const expected = YOLO_CHANNELS * anchors;
   if (output.length < expected) {
     throw new Error(
@@ -130,7 +156,7 @@ export function decodeYoloPose(
     }
   }
 
-  if (bestConf < MIN_DETECTION_CONFIDENCE) return null;
+  if (bestConf < MIN_DETECTION_CONFIDENCE) return { detection: null, confidence: bestConf };
 
   const { scale, padX, padY } = letterbox;
   const safeScale = scale > 0 ? scale : 1;
@@ -160,5 +186,5 @@ export function decodeYoloPose(
     });
   }
 
-  return { box, keypoints };
+  return { detection: { box, keypoints }, confidence: bestConf };
 }

@@ -1,7 +1,7 @@
 import {
   YOLO_INPUT_SIZE,
   centerCropFor,
-  decodeYoloPose,
+  decodeYoloPoseDetailed,
   type Detection,
 } from "@alphadog/core";
 import { useMemo } from "react";
@@ -57,6 +57,43 @@ import type { DetectorStatus } from "./detector";
  */
 const FRAME_SKIP = 3;
 
+/**
+ * Quanto girar o frame, no sentido horário, para ele ficar de pé.
+ *
+ * ESTA ERA A FALHA QUE FAZIA A DETECÇÃO NÃO ACONTECER NUNCA.
+ *
+ * O buffer que a câmera do Android entrega vem na orientação do SENSOR, que é
+ * deitada, enquanto o telefone é segurado em pé. A documentação da VisionCamera
+ * diz isso com todas as letras:
+ *
+ *   "if the phone is held in 'portrait' mode and the Frame's orientation is
+ *    'landscape-left', it is 90° rotated relative to the phone's rotation.
+ *    To make the frame appear up-right, one would need to counter-rotate it."
+ *
+ * Sem essa correção o modelo recebia todo cão deitado de lado. Um YOLO treinado
+ * com fotos em pé não reconhece a mesma silhueta girada 90° — a confiança
+ * despenca para perto de zero, e o aplicativo mostrava "procurando" para
+ * sempre, com inferência real rodando o tempo todo. Parecia interface simulada
+ * e era o contrário: o modelo trabalhava, olhando para a imagem errada.
+ *
+ * O plugin gira no sentido horário, e o giro acontece DEPOIS do recorte e da
+ * escala. Como o recorte é o quadrado central e o quadrado é simétrico ao giro,
+ * girar antes ou depois dá o mesmo resultado — o que permite mapear as
+ * coordenadas de volta usando as dimensões já giradas, sem desfazer rotação
+ * nenhuma.
+ */
+type Rotation = "0deg" | "90deg" | "180deg" | "270deg";
+
+const UPRIGHT_ROTATION: Record<string, Rotation> = {
+  portrait: "0deg",
+  "landscape-left": "90deg",
+  "portrait-upside-down": "180deg",
+  "landscape-right": "270deg",
+};
+
+/** Uma linha a cada ~10 segundos de análise: o suficiente para diagnosticar. */
+const LOG_EVERY = 100;
+
 export function usePoseFrameProcessor(
   detector: DetectorStatus,
   /**
@@ -71,6 +108,10 @@ export function usePoseFrameProcessor(
     timestampSeconds: number,
     frameWidth: number,
     frameHeight: number,
+    /** Confiança da melhor âncora, mesmo quando nenhuma passou do limiar. */
+    confidence: number,
+    /** Tempo da inferência em milissegundos. */
+    inferenceMs: number,
   ) => void,
   /**
    * A trava de laço de crash liberou a análise nesta sessão?
@@ -105,9 +146,16 @@ export function usePoseFrameProcessor(
   // runtimes distintos.
   const emit = useMemo(() => Worklets.createRunOnJS(onDetection), [onDetection]);
 
-  // Contador de descarte. Vive num objeto porque o worklet captura a referência
-  // uma vez e a mantém entre invocações — variável solta seria recopiada.
-  const counter = useMemo(() => ({ n: 0 }), []);
+  // Ponte de log. `console.log` dentro do worklet não chega ao logcat: o
+  // runtime da câmera é outro, sem o console da ponte do React Native.
+  const log = useMemo(
+    () => Worklets.createRunOnJS((message: string) => console.log(message)),
+    [],
+  );
+
+  // Contadores. Vivem num objeto porque o worklet captura a referência uma vez
+  // e a mantém entre invocações — variável solta seria recopiada a cada frame.
+  const counter = useMemo(() => ({ n: 0, logs: 0 }), []);
 
   const enabled = allowed && boxedModel != null && resize != null;
 
@@ -120,12 +168,15 @@ export function usePoseFrameProcessor(
       if (counter.n !== 0) return;
 
       try {
-        // Recorte central quadrado + escala para 640x640, em RGB float32
-        // normalizado, tudo em nativo. Sem `crop` explícito o plugin corta o
-        // maior quadrado central para casar a proporção 1:1 do alvo — que é
-        // justamente o que preserva a razão de aspecto do cão.
+        const rotation = UPRIGHT_ROTATION[frame.orientation] ?? "0deg";
+
+        // Recorte central quadrado + escala para 640x640 + giro para deixar a
+        // imagem de pé, em RGB float32 normalizado, tudo em nativo. Sem `crop`
+        // explícito o plugin corta o maior quadrado central para casar a
+        // proporção 1:1 do alvo — que é o que preserva a razão de aspecto do cão.
         const resized = resize(frame, {
           scale: { width: YOLO_INPUT_SIZE, height: YOLO_INPUT_SIZE },
+          rotation,
           pixelFormat: "rgb",
           dataType: "float32",
         });
@@ -140,21 +191,61 @@ export function usePoseFrameProcessor(
           input[2 * plane + p] = resized[s + 2]!;
         }
 
+        // Relógio lido direto do global: uma função auxiliar precisaria ser
+        // workletizada, e o ganho não paga o risco.
+        const clock = (globalThis as { performance?: { now?: () => number } })
+          .performance;
+        const startedAt = clock && clock.now ? clock.now() : 0;
+
         const tflite = boxedModel.unbox();
         const outputs = tflite.runSync([input.buffer as ArrayBuffer]);
         const scores = new Float32Array(outputs[0]!);
 
-        const detection = decodeYoloPose(
+        // Dimensões do frame JÁ GIRADO. É nesse espaço que a caixa precisa
+        // sair: é ele que corresponde ao que o tutor vê na tela, e é o que a
+        // sobreposição usa para desenhar por cima do cão.
+        // Girar 90° ou 270° troca largura por altura. Comparação inline, e não
+        // função auxiliar: chamar função não workletizada de dentro do worklet
+        // falha em tempo de execução.
+        const swaps = rotation === "90deg" || rotation === "270deg";
+        const uprightW = swaps ? frame.height : frame.width;
+        const uprightH = swaps ? frame.width : frame.height;
+
+        const result = decodeYoloPoseDetailed(
           scores,
-          centerCropFor(frame.width, frame.height),
+          centerCropFor(uprightW, uprightH),
         );
-        emit(detection, frame.timestamp / 1e9, frame.width, frame.height);
+
+        const elapsed =
+          clock && clock.now ? Math.round(clock.now() - startedAt) : 0;
+
+        // Amostra periódica com os números que decidem o diagnóstico: se a
+        // confiança fica em 0,00 a entrada está errada; se fica em 0,4x o
+        // limiar é que está apertado. Sem isso, as duas produzem a mesma tela
+        // vazia — foi essa ambiguidade que custou várias builds.
+        counter.logs = (counter.logs + 1) % LOG_EVERY;
+        if (counter.logs === 1) {
+          log(
+            `[AlphaDog] inferência ${elapsed}ms · frame ${frame.width}x${frame.height} ` +
+              `${frame.orientation} -> gira ${rotation} · melhor confiança ` +
+              `${result.confidence.toFixed(3)} · ${result.detection ? "COM cão" : "sem cão"}`,
+          );
+        }
+
+        emit(
+          result.detection,
+          frame.timestamp / 1e9,
+          uprightW,
+          uprightH,
+          result.confidence,
+          elapsed,
+        );
       } catch {
         // Frame ruim não derruba a sessão. Perder uma leitura custa uma
         // repetição; travar a câmera custa o treino inteiro.
       }
     },
-    [enabled, boxedModel, resize, emit, counter],
+    [enabled, boxedModel, resize, emit, log, counter],
   );
 
   // undefined quando não há modelo: entregar um processor à câmera sem ter o
