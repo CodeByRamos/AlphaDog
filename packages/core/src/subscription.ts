@@ -55,13 +55,25 @@ export function formatBRL(cents: number): string {
   return `R$ ${reais}`;
 }
 
+/**
+ * Estados possíveis da assinatura. Espelha o enum `subscription_status` do
+ * Postgres — se um estado existe no banco e não existe aqui, o app recebe uma
+ * string que o TypeScript jura ser impossível, e a checagem de acesso decide
+ * pelo caminho errado.
+ *
+ * `processing`, `refunded` e `failed` entraram com a SyncPay: PIX avulso tem
+ * situações que a recorrência em cartão não tinha.
+ */
 export const SUBSCRIPTION_STATUSES = [
   "trialing",
   "active",
+  "processing",
   "past_due",
   "canceled",
   "incomplete",
   "expired",
+  "refunded",
+  "failed",
 ] as const;
 
 export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUSES)[number];

@@ -22,7 +22,7 @@ Escrito depois de ler o código, não de memória.
 | Decodificação da saída do modelo | ✅ 11 testes unitários |
 | Paywall no cliente | ✅ Gate + guarda de deep link |
 | Tabela de assinaturas + RLS | ✅ cliente lê, nunca escreve |
-| Webhook do gateway | ✅ escrito (Asaas), aguarda credenciais |
+| Webhook do gateway | ✅ escrito (SyncPay), aguarda credenciais |
 | Trava de servidor (migration 0004) | ✅ escrita, **não aplicada** — ver §3 |
 | Landing page | ✅ copy de conversão, build verde |
 | Preparação iOS/TestFlight | ✅ ver `docs/TESTFLIGHT.md` |
@@ -38,7 +38,7 @@ A Apple exige que assinatura de conteúdo digital use o **IAP dela** (comissão
 (Guideline 3.1.1).
 
 Três caminhos, e é decisão sua:
-- **A.** IAP no iOS + Asaas no Android/web. Mais trabalho, receita nas duas lojas.
+- **A.** IAP no iOS + SyncPay no Android/web. Mais trabalho, receita nas duas lojas.
 - **B.** App iOS não vende: o usuário assina no site e faz login no app. Legal,
   mas não pode nem mencionar o site dentro do app iOS.
 - **C.** Lançar só Android agora. A Play Store aceita cobrança externa com menos
@@ -71,18 +71,24 @@ lojas rejeitam. Trocar por depoimentos reais ou remover.
 
 ## 3. 🟡 Bloqueia a cobrança
 
-### 3.1 Conta no gateway + credenciais
-O webhook está escrito (`supabase/functions/asaas-webhook`). Falta:
-1. Conta no [Asaas](https://www.asaas.com) aprovada
-2. Chave de API e token do webhook
-3. `supabase secrets set ASAAS_WEBHOOK_TOKEN=... `
-4. `supabase functions deploy asaas-webhook --no-verify-jwt`
-5. Cadastrar a URL do webhook no painel do Asaas
+### 3.1 Credenciais da SyncPay
+Toda a camada está escrita: checkout, webhook, banco, estados e auditoria.
+Ver `docs/SYNCPAY.md` para o passo a passo completo. Em resumo, falta:
+1. Conta aprovada e credenciais em `app.syncpayments.com.br/seller/developer-api`
+2. Preencher `SYNCPAY_CLIENT_ID`, `SYNCPAY_CLIENT_SECRET` e `SYNCPAY_WEBHOOK_SECRET`
+3. Preencher `SUPABASE_SERVICE_ROLE_KEY` **só no servidor**
+4. Aplicar `supabase/migrations/0005_syncpay.sql`
+5. Confirmar no sandbox a unidade de `amount` e o caminho de consulta
+   (`SYNCPAY_STATUS_PATH`)
 
-### 3.2 Criação de cobrança no app
-O botão "Assinar" hoje avisa que o checkout está em configuração — **não
-simula sucesso**, de propósito. Falta a chamada que cria a cobrança no Asaas e
-devolve o QR do PIX ou o formulário do cartão. Depende de 3.1.
+Não é preciso cadastrar URL de webhook em painel nenhum: ela vai em cada
+cobrança, no campo `postbackUrl`.
+
+### 3.2 Criação de cobrança
+Implementada: `startCheckout` cria o registro no banco, chama
+`POST /v1/gateway/api` e devolve o PIX (copia-e-cola e QR) para a tela, que
+acompanha o estado até a confirmação. Sem credenciais, o botão informa
+"pagamento temporariamente indisponível" — **não simula sucesso**, de propósito.
 
 ### 3.3 Aplicar a migration 0004
 A trava de servidor está escrita mas **não aplicada**. Enquanto isso, o paywall
@@ -92,7 +98,7 @@ A trava de servidor está escrita mas **não aplicada**. Enquanto isso, o paywal
 > dos testadores). Aplicar antes tranca todo mundo, inclusive você.
 
 ### 3.4 Nota fiscal
-Cobrança recorrente de PF/PJ no Brasil exige emissão. O Asaas emite
+Cobrança recorrente de PF/PJ no Brasil exige emissão. O SyncPay emite
 automaticamente se configurado.
 
 ---
@@ -149,7 +155,7 @@ verificado.
 4. Remover a prova social inventada
 
 **Antes de cobrar**
-5. Abrir conta no Asaas e me passar as chaves → eu ligo o checkout
+5. Abrir conta no SyncPay e me passar as chaves → eu ligo o checkout
 6. Aplicar a migration 0004
 7. Preencher os dados da empresa nos textos legais
 
@@ -167,7 +173,7 @@ Sendo explícito para você não descobrir na véspera:
 - **Checkout real** — o botão avisa que está em configuração; não cobra ninguém
 - **IAP da Apple** — nada implementado
 - **Renovação automática** — o webhook trata a confirmação, mas o ciclo
-  recorrente depende da configuração no Asaas
+  recorrente depende da configuração no SyncPay
 - **Recibos e histórico de pagamento na UI** — os dados existem no gateway,
   falta a tela
 - **Modo offline, notificações, calendário, metas, gamificação** — no

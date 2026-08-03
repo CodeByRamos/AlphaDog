@@ -49,8 +49,8 @@ Pré-requisito de um app pago. Já iniciado.
 - [ ] Tabela `subscriptions` no Supabase (RLS: dono lê; service_role escreve via webhook)
 - [ ] `useSubscription` + gate no `app/index.tsx` e guarda no `(app)/_layout`
 - [ ] Tela de assinatura premium (planos, FAQ, cobrança recorrente, honesta sobre a câmera)
-- [ ] Provider Asaas atrás da interface `PaymentProvider` que já existe (dormente até as chaves)
-- [ ] Webhook (Edge Function) sincronizando status — **precisa de conta Asaas + chaves**
+- [ ] Provider SyncPay atrás da interface `PaymentProvider` que já existe (dormente até as chaves)
+- [ ] Webhook (Edge Function) sincronizando status — **precisa de conta SyncPay + chaves**
 
 Decisão travada: cobrança como **CPF** → cartão recorrente; PIX estende acesso por
 N dias (o `pricing.ts` já modela `days` por plano). PIX Automático exigiria CNPJ.

@@ -253,6 +253,9 @@ importers:
       typescript:
         specifier: ^5
         version: 5.9.3
+      vitest:
+        specifier: ^2.1.9
+        version: 2.1.9(@types/node@20.19.43)(lightningcss@1.32.0)(terser@5.49.0)
 
   packages/core:
     devDependencies:
@@ -13232,7 +13235,7 @@ snapshots:
       '@rollup/rollup-win32-ia32-msvc': 4.62.2
       '@rollup/rollup-win32-x64-gnu': 4.62.2
       '@rollup/rollup-win32-x64-msvc': 4.62.2
-      fsevents: 2.3.2
+      fsevents: 2.3.3
 
   run-parallel@1.2.0:
     dependencies:

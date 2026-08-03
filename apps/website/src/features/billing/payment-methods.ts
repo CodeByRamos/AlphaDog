@@ -1,13 +1,19 @@
 import type { PlanId } from "./pricing";
 
 /**
- * Meios de pagamento aceitos.
+ * Meios de pagamento.
  *
- * A lista é fechada de propósito: PIX, crédito e débito. Boleto, PayPal,
- * carteiras e cripto ficam fora — como é um `const` tipado, adicionar um método
- * exige mexer aqui, não em algum formulário perdido.
+ * HOJE SÓ PIX, e isso é constatação, não escolha de produto: a API que a
+ * SyncPay documenta para receber é o cash-in por PIX (`POST /v1/gateway/api`),
+ * cuja resposta traz `paymentCode` e `paymentCodeBase64` — copia-e-cola e QR.
+ * Não há, na documentação pública, endpoint de cobrança em cartão nem de
+ * recorrência automática.
+ *
+ * A lista é fechada e tipada de propósito: quando o cartão for habilitado no
+ * contrato, adicioná-lo exige mexer aqui e escrever a chamada correspondente —
+ * e não descobrir em produção que um botão bonito não cobra nada.
  */
-export const PAYMENT_METHODS = ["pix", "credit_card", "debit_card"] as const;
+export const PAYMENT_METHODS = ["pix"] as const;
 
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
@@ -15,9 +21,7 @@ export type PaymentMethodInfo = {
   id: PaymentMethod;
   label: string;
   description: string;
-  /** Parcelamento só existe no crédito. */
-  supportsInstallments: boolean;
-  /** PIX confirma na hora; cartão pode cair em análise. */
+  /** PIX confirma na hora; cartão cairia em análise. */
   settlement: "instant" | "authorization";
 };
 
@@ -25,27 +29,10 @@ export const paymentMethods: readonly PaymentMethodInfo[] = [
   {
     id: "pix",
     label: "PIX",
-    description: "Aprovação na hora, sem taxa.",
-    supportsInstallments: false,
+    description: "Aprovação em segundos.",
     settlement: "instant",
   },
-  {
-    id: "credit_card",
-    label: "Cartão de crédito",
-    description: "Parcele em até 12x.",
-    supportsInstallments: true,
-    settlement: "authorization",
-  },
-  {
-    id: "debit_card",
-    label: "Cartão de débito",
-    description: "Débito à vista na sua conta.",
-    supportsInstallments: false,
-    settlement: "authorization",
-  },
 ];
-
-export const MAX_INSTALLMENTS = 12;
 
 export function getPaymentMethod(id: PaymentMethod) {
   const method = paymentMethods.find((m) => m.id === id);
@@ -56,27 +43,24 @@ export function getPaymentMethod(id: PaymentMethod) {
 /**
  * Contrato do gateway.
  *
- * Nenhum provedor está integrado. A interface existe para que a escolha entre
- * Asaas, Mercado Pago, Pagar.me ou Stripe Brasil seja uma implementação nova, e
- * não uma reescrita do domínio — o resto do código só conhece este contrato.
+ * A SyncPay é o provedor atual e único. A interface continua existindo para que
+ * trocar de provedor — ou somar um segundo — seja escrever uma implementação
+ * nova, e não reescrever o domínio: quem chama conhece só este contrato.
  */
 export type CheckoutIntent = {
   planId: PlanId;
   method: PaymentMethod;
-  /** Sempre 1 fora do crédito. */
-  installments: number;
-  /** Em centavos, já com desconto aplicado e validado no servidor. */
+  /** Em centavos, resolvido no servidor contra o catálogo. Nunca vem do cliente. */
   amountCents: number;
-  offerId?: string;
-  customer: { email: string; name?: string; taxId?: string };
+  /** Id do nosso registro de pagamento, enviado ao gateway como referência. */
+  reference: string;
+  customer: { email: string; name: string; cpf: string; phone?: string };
 };
 
 export type CheckoutSession = {
+  /** Id da transação no gateway. */
   id: string;
-  /** Para redirecionar ao gateway, quando ele hospeda a página. */
-  redirectUrl?: string;
-  /** PIX: payload copia-e-cola e QR. */
-  pix?: { qrCode: string; copyPaste: string; expiresAt: string };
+  pix?: { copyPaste: string; qrCodeBase64?: string };
   status: "pending" | "paid" | "failed" | "expired";
 };
 
@@ -84,7 +68,6 @@ export interface PaymentProvider {
   readonly name: string;
   readonly supports: readonly PaymentMethod[];
   createCheckout(intent: CheckoutIntent): Promise<CheckoutSession>;
+  /** Reconfere o estado direto na fonte, para o webhook não ser a única palavra. */
   getCheckout(id: string): Promise<CheckoutSession | null>;
-  /** Valida assinatura do webhook antes de qualquer efeito colateral. */
-  verifyWebhook(payload: string, signature: string): Promise<boolean>;
 }

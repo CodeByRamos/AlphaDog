@@ -90,14 +90,21 @@ O que funciona depois desses 4 passos:
 Nada disso bloqueia hoje.
 
 ### Ligar o pagamento
-1. Abrir conta no [Asaas](https://www.asaas.com) (grátis, precisa aprovação)
-2. Pegar a chave de API e colocar em `apps/website/.env.local`:
+Passo a passo completo em `docs/SYNCPAY.md`. Resumo:
+
+1. Conta na SyncPay aprovada; credenciais em
+   `app.syncpayments.com.br/seller/developer-api`
+2. Em `apps/website/.env.local`:
    ```
-   ASAAS_API_KEY=sua_chave
-   ASAAS_ENV=sandbox
+   SYNCPAY_CLIENT_ID="..."
+   SYNCPAY_CLIENT_SECRET="..."
+   SYNCPAY_WEBHOOK_SECRET="..."   # openssl rand -hex 32
+   SUPABASE_SERVICE_ROLE_KEY="..."
+   SYNCPAY_ENVIRONMENT="sandbox"
    ```
-3. Me avisar → eu testo o checkout de ponta a ponta
-4. Trocar para `ASAAS_ENV=production` quando estiver funcionando
+3. Aplicar `supabase/migrations/0005_syncpay.sql`
+4. No sandbox: confirmar a unidade de `amount` e preencher `SYNCPAY_STATUS_PATH`
+5. Trocar para `SYNCPAY_ENVIRONMENT="production"` quando estiver funcionando
 
 ### Travar o acesso de verdade
 Rodar `supabase/migrations/0004_enforce_subscription.sql` no SQL Editor.

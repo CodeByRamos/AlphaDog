@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Container, Section } from "@/components/ui/section";
-import { isSandbox } from "@/features/billing/asaas";
+import { getSyncPayEnvironmentLabel } from "@/features/billing/environment";
 import { SubscribeForm } from "./subscribe-form";
 
 export const metadata: Metadata = {
@@ -60,7 +60,7 @@ export default async function AssinarPage({
             </p>
           </div>
 
-          {isSandbox() && (
+          {getSyncPayEnvironmentLabel().sandbox && (
             // Sem este aviso, um deploy esquecido em sandbox faria alguém achar
             // que pagou de verdade.
             <p className="border-alpha-300 bg-alpha-50 text-alpha-800 mt-8 rounded-xl border p-3 text-center text-sm font-semibold">

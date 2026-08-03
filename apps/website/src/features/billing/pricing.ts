@@ -5,45 +5,89 @@
  * erro de arredondamento em cobrança é bug que aparece no extrato do cliente.
  */
 
-export type PlanId = "mensal" | "trimestral" | "semestral";
+export type PlanId = "mensal" | "trimestral" | "semestral" | "anual";
 
 export type Plan = {
   id: PlanId;
   name: string;
+  /** Uma linha explicando para quem o plano serve. */
+  description: string;
   months: number;
   days: number;
   /** Preço cheio, sem desconto, em centavos. */
   listPriceCents: number;
+  /** O que o tutor leva. Igual em todos hoje; o campo existe para diferenciar. */
+  benefits: readonly string[];
+  /**
+   * Plano à venda?
+   *
+   * `archived` some da vitrine mas continua válido para quem já assinou —
+   * remover a linha do catálogo quebraria a renovação e o histórico de quem
+   * comprou nele.
+   */
+  status: "active" | "archived";
   /** Destaque visual — só um plano pode ser o recomendado. */
   featured?: boolean;
   badge?: string;
 };
 
+/** O que toda assinatura entrega, independente do período. */
+const CORE_BENEFITS = [
+  "Reconhecimento de postura pela câmera, direto no aparelho",
+  "Plano de treino personalizado para o seu cão",
+  "Biblioteca completa de exercícios",
+  "Histórico de sessões e evolução",
+  "Bônus: socialização, ansiedade, latido e jogos de faro",
+] as const;
+
 export const plans: readonly Plan[] = [
   {
     id: "mensal",
     name: "1 mês",
+    description: "Para experimentar sem compromisso longo.",
     months: 1,
     days: 30,
     listPriceCents: 4990,
+    benefits: CORE_BENEFITS,
+    status: "active",
   },
   {
     id: "trimestral",
     name: "3 meses",
+    description: "O tempo que um comando novo leva para virar hábito.",
     months: 3,
     days: 90,
     listPriceCents: 8990,
+    benefits: CORE_BENEFITS,
+    status: "active",
     featured: true,
     badge: "Mais escolhido",
   },
   {
     id: "semestral",
     name: "6 meses",
+    description: "Para quem quer o repertório completo, do básico ao avançado.",
     months: 6,
     days: 180,
     listPriceCents: 14990,
+    benefits: CORE_BENEFITS,
+    status: "active",
+  },
+  {
+    id: "anual",
+    name: "12 meses",
+    description: "Um ano inteiro pelo preço de pouco mais de meio.",
+    months: 12,
+    days: 365,
+    listPriceCents: 24990,
+    benefits: CORE_BENEFITS,
+    status: "active",
+    badge: "Melhor preço por dia",
   },
 ] as const;
+
+/** Só os planos à venda. A vitrine usa esta lista; o histórico usa `plans`. */
+export const activePlans = plans.filter((p) => p.status === "active");
 
 export const DEFAULT_PLAN_ID: PlanId = "trimestral";
 

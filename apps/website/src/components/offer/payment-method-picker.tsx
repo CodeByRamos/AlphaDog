@@ -1,21 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { Check, CreditCard, Landmark, QrCode } from "lucide-react";
+import { Check, QrCode } from "lucide-react";
 import { paymentMethods, type PaymentMethod } from "@/features/billing/payment-methods";
 import { cn } from "@/lib/utils";
 
+// Um ícone por método aceito. O tipo é fechado: adicionar um meio de pagamento
+// sem ícone quebra a compilação, em vez de renderizar um espaço vazio.
 const ICON: Record<PaymentMethod, typeof QrCode> = {
   pix: QrCode,
-  credit_card: CreditCard,
-  debit_card: Landmark,
 };
 
 /**
  * Escolha do meio de pagamento.
  *
- * Só apresentação: nenhum gateway está integrado, então o componente informa a
- * escolha para cima e para por aí.
+ * Só apresentação: informa a escolha para cima e para por aí. Hoje a lista tem
+ * um item só — a SyncPay documenta cash-in por PIX, sem cobrança em cartão.
  */
 export function PaymentMethodPicker({
   value,

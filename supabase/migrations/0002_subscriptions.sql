@@ -41,7 +41,7 @@ create table public.subscriptions (
   cancel_at_period_end boolean not null default false,
   -- Meio usado na última cobrança: pix, credit_card, debit_card.
   payment_method text,
-  -- Identificadores no gateway (Asaas/etc), para o webhook casar o evento com a
+  -- Identificadores no gateway (SyncPay), para o webhook casar o evento com a
   -- assinatura sem ambiguidade.
   gateway_customer_id text,
   gateway_subscription_id text,
