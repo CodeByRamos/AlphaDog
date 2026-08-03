@@ -14,7 +14,22 @@ import "server-only";
  * publicar o segredo.
  */
 
-/** Ambiente da SyncPay. Trocar de sandbox para produção é trocar esta variável. */
+/**
+ * Rótulo de ambiente — NOSSO, não da SyncPay.
+ *
+ * ATENÇÃO, E ISSO É O CONTRÁRIO DO QUE O NOME SUGERE: a SyncPay não expôs uma
+ * API de sandbox separada. Verificado com credenciais reais — a mesma base
+ * (`api.syncpayments.com.br`) atende, e a conta responde
+ * `status: "approved"` com saldo real.
+ *
+ * Ou seja: **"sandbox" aqui NÃO torna a cobrança falsa**. Toda cobrança criada
+ * é um PIX de verdade, que uma pessoa de verdade pode pagar. Esta variável
+ * controla apenas a tarja de aviso na tela de assinatura.
+ *
+ * O nome foi mantido porque a tarja continua útil enquanto o fluxo não está
+ * liberado ao público — mas quem mexer aqui precisa saber que a proteção é
+ * visual, não financeira.
+ */
 export type SyncPayEnvironment = "sandbox" | "production";
 
 export type SyncPayConfig = {
@@ -44,8 +59,16 @@ export type SyncPayConfig = {
   siteUrl: string;
 };
 
-/** Endereço padrão da API. Sobrescrito por SYNCPAY_BASE_URL quando preciso. */
-const DEFAULT_BASE_URL = "https://api.syncpay.pro";
+/**
+ * Endereço da API, confirmado por chamada real de autenticação.
+ *
+ * `api.syncpay.pro` — que aparece em material de terceiros — NÃO RESOLVE DNS.
+ * O host que responde é este, verificado com credenciais de verdade:
+ * `POST /api/partner/v1/auth-token` devolveu 200 com access_token.
+ *
+ * Sobrescrito por SYNCPAY_BASE_URL se a SyncPay indicar outro para a conta.
+ */
+const DEFAULT_BASE_URL = "https://api.syncpayments.com.br";
 
 function required(name: string): string {
   const value = process.env[name]?.trim();
