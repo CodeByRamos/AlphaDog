@@ -125,6 +125,18 @@ async function requestJson(
       status: response.status,
       body: redact(body),
     });
+
+    // 429 tem tratamento próprio porque a janela é longa: a SyncPay responde
+    // "Tente novamente em 10 minutos". Insistir só empurra o bloqueio para
+    // frente — e o tutor precisa saber que o problema é temporário e não dele.
+    if (response.status === 429) {
+      throw new SyncPayError(
+        "SyncPay recusou por excesso de requisições (429). Aguarde alguns minutos.",
+        429,
+        redact(body),
+      );
+    }
+
     throw new SyncPayError(
       `SyncPay respondeu ${response.status} em ${context}.`,
       response.status,

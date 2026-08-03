@@ -88,11 +88,29 @@ function isValidCpf(raw: string): boolean {
   return check(9) === Number(cpf[9]) && check(10) === Number(cpf[10]);
 }
 
+/**
+ * Dados que a SyncPay exige, e que a documentação dela não diz que exige.
+ *
+ * A API respondeu 422 listando telefone e TODOS os campos de endereço como
+ * obrigatórios. Por isso eles são obrigatórios aqui também: descobrir isso no
+ * meio do checkout de um cliente real seria descobrir tarde.
+ */
+export type CheckoutAddress = {
+  zipCode: string;
+  street: string;
+  streetNumber: string;
+  neighborhood: string;
+  city: string;
+  state: string;
+  complement?: string;
+};
+
 export async function startCheckout(input: {
   planId: PlanId;
   cpf: string;
+  phone: string;
+  address: CheckoutAddress;
   name?: string;
-  phone?: string;
 }): Promise<CheckoutResult> {
   const user = await currentUser();
   if (!user) {
@@ -113,6 +131,33 @@ export async function startCheckout(input: {
 
   if (!isValidCpf(input.cpf)) {
     return { ok: false, error: "CPF inválido. Confira os números e tente de novo." };
+  }
+
+  // Telefone brasileiro: 10 dígitos (fixo) ou 11 (celular), com DDD.
+  const phone = digits(input.phone);
+  if (phone.length < 10 || phone.length > 11) {
+    return { ok: false, error: "Telefone inválido. Inclua o DDD." };
+  }
+
+  const zipCode = digits(input.address.zipCode);
+  if (zipCode.length !== 8) {
+    return { ok: false, error: "CEP inválido." };
+  }
+
+  // Cada campo é conferido separado porque a SyncPay recusa a cobrança inteira
+  // se qualquer um faltar, e um erro genérico deixaria o tutor adivinhando qual.
+  const missing = (
+    [
+      ["rua", input.address.street],
+      ["número", input.address.streetNumber],
+      ["bairro", input.address.neighborhood],
+      ["cidade", input.address.city],
+      ["estado", input.address.state],
+    ] as const
+  ).find(([, value]) => !value?.trim());
+
+  if (missing) {
+    return { ok: false, error: `Preencha o campo ${missing[0]} do endereço.` };
   }
 
   let plan;
@@ -155,7 +200,16 @@ export async function startCheckout(input: {
           user.email!.split("@")[0]!,
         email: user.email!,
         cpf: digits(input.cpf),
-        phone: input.phone ? digits(input.phone) : undefined,
+        phone,
+        address: {
+          zipCode,
+          street: input.address.street.trim(),
+          streetNumber: input.address.streetNumber.trim(),
+          neighborhood: input.address.neighborhood.trim(),
+          city: input.address.city.trim(),
+          state: input.address.state.trim().toUpperCase().slice(0, 2),
+          complement: input.address.complement?.trim(),
+        },
       },
       ip,
     });

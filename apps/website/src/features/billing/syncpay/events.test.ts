@@ -36,6 +36,14 @@ describe("normalizePaymentStatus", () => {
     }
   });
 
+  it("reconhece os estados que a API devolve de verdade", () => {
+    // Observados em chamada real, e ausentes da documentação: WAITING_FOR_APPROVAL
+    // vem na criação da cobrança; ATIVA, no payload dinâmico do PIX. Os dois
+    // significam "ainda não pagou" e não podem virar acesso liberado.
+    expect(normalizePaymentStatus("WAITING_FOR_APPROVAL")).toBe("pending");
+    expect(normalizePaymentStatus("ATIVA")).toBe("pending");
+  });
+
   it("separa recusa, cancelamento, reembolso e contestação", () => {
     expect(normalizePaymentStatus("refused")).toBe("failed");
     expect(normalizePaymentStatus("cancelled")).toBe("canceled");

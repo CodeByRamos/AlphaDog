@@ -93,6 +93,10 @@ const STATUS_MAP: Record<string, PaymentStatus> = {
   waiting: "pending",
   waiting_payment: "pending",
   created: "pending",
+  // Devolvido pela própria API na criação da cobrança, em `status_transaction`.
+  // Observado em chamada real — não estava na documentação.
+  waiting_for_approval: "pending",
+  ativa: "pending",
 
   processing: "processing",
   in_process: "processing",

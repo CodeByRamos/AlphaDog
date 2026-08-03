@@ -34,6 +34,19 @@ const POLL_MS = 3_000;
 /** Depois disso paramos de perguntar sozinhos e oferecemos o botão. */
 const POLL_TIMEOUT_MS = 15 * 60 * 1000;
 
+function maskPhone(value: string): string {
+  const d = value.replace(/\D/g, "").slice(0, 11);
+  if (d.length <= 10) {
+    return d.replace(/(\d{2})(\d)/, "($1) $2").replace(/(\d{4})(\d)/, "$1-$2");
+  }
+  return d.replace(/(\d{2})(\d)/, "($1) $2").replace(/(\d{5})(\d)/, "$1-$2");
+}
+
+function maskCep(value: string): string {
+  const d = value.replace(/\D/g, "").slice(0, 8);
+  return d.replace(/(\d{5})(\d)/, "$1-$2");
+}
+
 function maskCpf(value: string): string {
   const d = value.replace(/\D/g, "").slice(0, 11);
   return d
@@ -56,6 +69,29 @@ export function SubscribeForm({ initialPlan }: { initialPlan?: PlanId }) {
   // coisa duas vezes é onde funil perde gente.
   const [planId, setPlanId] = useState<PlanId>(initialPlan ?? "trimestral");
   const [cpf, setCpf] = useState("");
+  const [phone, setPhone] = useState("");
+
+  /**
+   * Endereço.
+   *
+   * A SyncPay exige rua, número, bairro, cidade, estado e CEP — descoberto
+   * batendo na API, porque a documentação lista tudo como opcional.
+   *
+   * Para não transformar o checkout num formulário de seis campos, o tutor
+   * digita só CEP e número: o resto vem sozinho dos Correios. É o padrão que
+   * todo brasileiro já conhece de loja online, e cada campo a menos é gente a
+   * mais chegando no fim.
+   */
+  const [zipCode, setZipCode] = useState("");
+  const [address, setAddress] = useState({
+    street: "",
+    neighborhood: "",
+    city: "",
+    state: "",
+  });
+  const [streetNumber, setStreetNumber] = useState("");
+  const [lookingUpCep, setLookingUpCep] = useState(false);
+  const [cepError, setCepError] = useState<string | null>(null);
 
   const [paymentId, setPaymentId] = useState<string | null>(null);
   const [pix, setPix] = useState<{ copyPaste: string; qrCodeBase64?: string } | null>(null);
@@ -134,7 +170,12 @@ export function SubscribeForm({ initialPlan }: { initialPlan?: PlanId }) {
     setBusy(true);
     setError(null);
 
-    const result = await startCheckout({ planId, cpf });
+    const result = await startCheckout({
+      planId,
+      cpf,
+      phone,
+      address: { zipCode, streetNumber, ...address },
+    });
     setBusy(false);
 
     if (!result.ok) {
@@ -149,6 +190,42 @@ export function SubscribeForm({ initialPlan }: { initialPlan?: PlanId }) {
     setPollExpired(false);
     setStep("pix");
   }
+
+  /**
+   * Preenche o endereço a partir do CEP.
+   *
+   * Usa o ViaCEP, que é público, gratuito e sem chave. Roda no navegador de
+   * propósito: é consulta a dado público, não passa por nós, e assim não gasta
+   * uma ida ao nosso servidor a cada tecla.
+   *
+   * Falhar aqui NÃO trava o checkout: os campos ficam editáveis à mão. CEP novo,
+   * zona rural e caixa postal existem, e nenhum deles pode impedir uma venda.
+   */
+  const lookupCep = useCallback(async (raw: string) => {
+    const digits = raw.replace(/\D/g, "");
+    if (digits.length !== 8) return;
+
+    setLookingUpCep(true);
+    setCepError(null);
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
+      const data = await response.json();
+      if (data.erro) {
+        setCepError("CEP não encontrado. Preencha o endereço à mão.");
+        return;
+      }
+      setAddress({
+        street: data.logradouro ?? "",
+        neighborhood: data.bairro ?? "",
+        city: data.localidade ?? "",
+        state: data.uf ?? "",
+      });
+    } catch {
+      setCepError("Não deu para buscar o CEP. Preencha o endereço à mão.");
+    } finally {
+      setLookingUpCep(false);
+    }
+  }, []);
 
   async function copyCode() {
     if (!pix) return;
@@ -382,6 +459,114 @@ export function SubscribeForm({ initialPlan }: { initialPlan?: PlanId }) {
           Exigido para emitir a cobrança PIX em seu nome.
         </p>
       </div>
+
+      <div className="space-y-1">
+        <label htmlFor="phone" className="text-ink-700 text-sm font-semibold">
+          Celular
+        </label>
+        <input
+          id="phone"
+          value={phone}
+          onChange={(e) => setPhone(maskPhone(e.target.value))}
+          className="border-ink-200 focus:border-alpha-500 w-full rounded-xl border px-4 py-3 outline-none"
+          placeholder="(11) 90000-0000"
+          inputMode="numeric"
+          autoComplete="tel"
+        />
+      </div>
+
+      {/* Só CEP e número. O resto os Correios preenchem — seis campos vazios
+          num checkout é gente desistindo antes de pagar. */}
+      <div className="grid grid-cols-[1fr_100px] gap-3">
+        <div className="space-y-1">
+          <label htmlFor="cep" className="text-ink-700 text-sm font-semibold">
+            CEP
+          </label>
+          <input
+            id="cep"
+            value={zipCode}
+            onChange={(e) => {
+              const masked = maskCep(e.target.value);
+              setZipCode(masked);
+              void lookupCep(masked);
+            }}
+            className="border-ink-200 focus:border-alpha-500 w-full rounded-xl border px-4 py-3 outline-none"
+            placeholder="00000-000"
+            inputMode="numeric"
+            autoComplete="postal-code"
+          />
+        </div>
+        <div className="space-y-1">
+          <label htmlFor="numero" className="text-ink-700 text-sm font-semibold">
+            Número
+          </label>
+          <input
+            id="numero"
+            value={streetNumber}
+            onChange={(e) => setStreetNumber(e.target.value)}
+            className="border-ink-200 focus:border-alpha-500 w-full rounded-xl border px-4 py-3 outline-none"
+            placeholder="123"
+            inputMode="numeric"
+          />
+        </div>
+      </div>
+
+      {lookingUpCep && <p className="text-ink-500 text-xs">Buscando endereço…</p>}
+      {cepError && <p className="text-xs font-semibold text-amber-700">{cepError}</p>}
+
+      {/* Aparece preenchido depois da busca, e continua editável: CEP de rua
+          nova volta sem logradouro, e o tutor precisa poder completar. */}
+      {(address.street || address.city || cepError) && (
+        <div className="border-ink-100 space-y-3 rounded-xl border p-4">
+          <div className="space-y-1">
+            <label htmlFor="rua" className="text-ink-700 text-xs font-semibold">
+              Rua
+            </label>
+            <input
+              id="rua"
+              value={address.street}
+              onChange={(e) => setAddress({ ...address, street: e.target.value })}
+              className="border-ink-200 focus:border-alpha-500 w-full rounded-lg border px-3 py-2 text-sm outline-none"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label htmlFor="bairro" className="text-ink-700 text-xs font-semibold">
+                Bairro
+              </label>
+              <input
+                id="bairro"
+                value={address.neighborhood}
+                onChange={(e) => setAddress({ ...address, neighborhood: e.target.value })}
+                className="border-ink-200 focus:border-alpha-500 w-full rounded-lg border px-3 py-2 text-sm outline-none"
+              />
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="cidade" className="text-ink-700 text-xs font-semibold">
+                Cidade
+              </label>
+              <input
+                id="cidade"
+                value={address.city}
+                onChange={(e) => setAddress({ ...address, city: e.target.value })}
+                className="border-ink-200 focus:border-alpha-500 w-full rounded-lg border px-3 py-2 text-sm outline-none"
+              />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <label htmlFor="uf" className="text-ink-700 text-xs font-semibold">
+              Estado (UF)
+            </label>
+            <input
+              id="uf"
+              value={address.state}
+              onChange={(e) => setAddress({ ...address, state: e.target.value.toUpperCase() })}
+              maxLength={2}
+              className="border-ink-200 focus:border-alpha-500 w-24 rounded-lg border px-3 py-2 text-sm outline-none"
+            />
+          </div>
+        </div>
+      )}
 
       {error && <p className="text-sm font-semibold text-red-600">{error}</p>}
 
