@@ -145,6 +145,41 @@ export function useDetector(): DetectorStatus {
           // adivinhar — e adivinhar já custou várias builds neste projeto.
           console.log(`[AlphaDog] modelo de visão carregado — acelerador: ${label}`);
 
+          // AUTOTESTE. Roda o modelo uma vez com um tensor sintético, na
+          // thread de JS, antes de qualquer frame de câmera.
+          //
+          // Existe porque "carregou" e "executa" são coisas diferentes: o
+          // TFLite aceita o arquivo, aloca os tensores e só falha na primeira
+          // inferência — que aconteceria dentro do worklet, onde o erro é mais
+          // difícil de ver. Aqui a falha aparece no log antes de a câmera abrir,
+          // e o detector fica indisponível com motivo, em vez de ficar "pronto"
+          // e nunca detectar nada.
+          try {
+            const probe = new Float32Array(3 * 640 * 640);
+            const started = Date.now();
+            const outputs = model.runSync([probe.buffer as ArrayBuffer]);
+            const values = new Float32Array(outputs[0]!);
+            console.log(
+              `[AlphaDog] autoteste de inferência OK — ${Date.now() - started}ms, ` +
+                `saída com ${values.length} valores (esperado ${77 * 8400})`,
+            );
+
+            if (values.length < 77 * 8400) {
+              throw new Error(
+                `saída menor que o esperado: ${values.length} < ${77 * 8400}`,
+              );
+            }
+          } catch (probeError) {
+            const message =
+              probeError instanceof Error ? probeError.message : String(probeError);
+            console.log(`[AlphaDog] AUTOTESTE DE INFERÊNCIA FALHOU: ${message}`);
+            setStatus({
+              kind: "unavailable",
+              reason: `O modelo carregou mas não executa neste aparelho: ${headline(message)}`,
+            });
+            return;
+          }
+
           setStatus({
             kind: "ready",
             accelerator: label,

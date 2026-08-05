@@ -3,6 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { StyleSheet, Text, View } from "react-native";
 import { color, radius, space } from "../../theme";
 import type { DetectorStatus } from "../../vision/detector";
+import type { VisionTelemetry } from "./useVisionRate";
 
 /**
  * Selo permanente de estado da IA, no topo da tela de treino.
@@ -22,40 +23,22 @@ import type { DetectorStatus } from "../../vision/detector";
 
 type Props = {
   detector: DetectorStatus;
-  /** Frames analisados por segundo, medido na própria tela. */
-  fps: number;
   /**
-   * Maior confiança do último segundo, MESMO ABAIXO DO LIMIAR.
+   * Telemetria da última janela de um segundo.
    *
-   * É o número mais importante desta tela durante o diagnóstico: perto de zero
-   * significa que o modelo não está reconhecendo nada do que recebe; perto do
-   * limiar significa que está quase, e o problema é calibragem.
+   * A confiança bruta é o número mais importante durante o diagnóstico: perto
+   * de zero significa que o modelo não reconhece o que recebe; perto do limiar
+   * significa que está quase, e o problema é calibragem.
    */
-  confidence: number | null;
-  /** Tempo da última inferência, em milissegundos. */
-  inferenceMs: number;
+  telemetry: VisionTelemetry;
   /** A trava de segurança desligou a análise neste aparelho. */
   blocked: boolean;
   /** O tutor escolheu marcar os acertos por conta própria. */
   manual: boolean;
 };
 
-export function VisionStatusPill({
-  detector,
-  fps,
-  confidence,
-  inferenceMs,
-  blocked,
-  manual,
-}: Props) {
-  const { icon, tint, label } = describe(
-    detector,
-    fps,
-    confidence,
-    inferenceMs,
-    blocked,
-    manual,
-  );
+export function VisionStatusPill({ detector, telemetry, blocked, manual }: Props) {
+  const { icon, tint, label } = describe(detector, telemetry, blocked, manual);
 
   return (
     <View style={[styles.pill, { borderColor: tint }]}>
@@ -69,9 +52,7 @@ export function VisionStatusPill({
 
 function describe(
   detector: DetectorStatus,
-  fps: number,
-  confidence: number | null,
-  inferenceMs: number,
+  telemetry: VisionTelemetry,
   blocked: boolean,
   manual: boolean,
 ): { icon: keyof typeof Ionicons.glyphMap; tint: string; label: string } {
@@ -97,8 +78,18 @@ function describe(
     return { icon: "alert-circle-outline", tint: color.warn500, label: "IA indisponível" };
   }
 
+  // Falha em todo frame é o cenário que antes ficava invisível: scanner
+  // girando, nada detectado, nada no log. Vem antes de qualquer outra coisa.
+  if (telemetry.failed > 0 && telemetry.analyzed === 0) {
+    return {
+      icon: "bug-outline",
+      tint: color.warn500,
+      label: `IA falhando · ${telemetry.failed} frames · toque`,
+    };
+  }
+
   // Pronta, mas ainda sem frame processado: a câmera acabou de abrir.
-  if (fps <= 0) {
+  if (telemetry.fps <= 0) {
     return {
       icon: "eye-outline",
       tint: color.ink300,
@@ -112,13 +103,16 @@ function describe(
   // A confiança aparece sempre, inclusive abaixo do limiar. Ela é a diferença
   // entre "o modelo olhou e não achou" e "o modelo recebeu lixo": um número que
   // reage ao que está na frente da câmera não pode ser interface simulada.
+  const confidence = telemetry.bestConfidence;
   const pct = confidence == null ? 0 : Math.round(confidence * 100);
   const detected = confidence != null && confidence >= MIN_DETECTION_CONFIDENCE;
 
   return {
     icon: "eye",
     tint: detected ? color.sage400 : color.alpha500,
-    label: `IA ${fps} fps · ${inferenceMs}ms · ${detected ? "cão" : "melhor"} ${pct}%`,
+    label:
+      `IA ${telemetry.fps} fps · ${telemetry.inferMs}ms · ` +
+      `${detected ? "cão" : "melhor"} ${pct}%`,
   };
 }
 

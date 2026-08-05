@@ -22,12 +22,16 @@ import {
   endVisionSession,
   markVisionAlive,
 } from "../../vision/pixelPathGuard";
-import { usePoseFrameProcessor } from "../../vision/usePoseFrameProcessor";
+import {
+  usePoseFrameProcessor,
+  type FrameStats,
+} from "../../vision/usePoseFrameProcessor";
 import { DogOutline } from "./DogOutline";
 import { ScanOverlay } from "./ScanOverlay";
 import { useScanPhase } from "./useScanPhase";
 import type { TrainingMode } from "./useTrainingMode";
 import { useVisionRate } from "./useVisionRate";
+import { VisionDebugPanel } from "./VisionDebugPanel";
 import { VisionStatusPill } from "./VisionStatusPill";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -107,7 +111,8 @@ export function CameraStage({
   const device = useCameraDevice("back");
   const visionAllowed = useVisionAllowed();
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const { fps, bestConfidence, inferenceMs, tick } = useVisionRate();
+  const { telemetry, tick } = useVisionRate();
+  const [debugOpen, setDebugOpen] = useState(false);
 
   /**
    * A trava desliga a ANÁLISE, não o detector.
@@ -122,16 +127,6 @@ export function CameraStage({
   const analyzing =
     !manual && visionAllowed === true && detector.kind === "ready";
 
-  // Motivo em português de gente, com a causa real. O tutor não precisa saber
-  // o que é um delegate, mas precisa saber que não é falta de implementação.
-  const unavailableReason = manual
-    ? "Modo manual: você marca cada acerto."
-    : visionBlocked
-      ? "O reconhecimento foi desligado neste aparelho depois de falhas seguidas. Reinstalar o app o reativa."
-      : detector.kind === "unavailable"
-        ? detector.reason
-        : "Preparando o reconhecimento…";
-
   const scan = useScanPhase(analyzing);
   // Dimensões do frame, para o contorno cair sobre o cão na tela. Num ref: muda
   // uma vez por sessão e não deve provocar render a cada quadro.
@@ -141,26 +136,32 @@ export function CameraStage({
   // sessão não recebe frame durante a identificação de propósito: o cronômetro
   // de permanência começaria a contar antes de o tutor estar pronto.
   const handleFrame = useCallback(
-    (
-      detection: Detection | null,
-      timestamp: number,
-      fw: number,
-      fh: number,
-      confidence: number,
-      inferenceMs: number,
-    ) => {
+    (detection: Detection | null, timestamp: number, stats: FrameStats) => {
       // Chegar aqui significa que o caminho nativo inteiro sobreviveu a um
       // frame. É a prova que desarma a trava de laço de crash.
       markVisionAlive();
-      tick(confidence, inferenceMs);
-      frameSize.current = { width: fw, height: fh };
+      tick(stats);
+      frameSize.current = { width: stats.frameWidth, height: stats.frameHeight };
       scan.observe(detection);
       if (scan.ready) onFrame(detection, timestamp);
     },
     [scan, onFrame, tick],
   );
 
-  const frameProcessor = usePoseFrameProcessor(detector, handleFrame, analyzing);
+  const { processor: frameProcessor, unavailableReason: pluginError } =
+    usePoseFrameProcessor(detector, handleFrame, analyzing);
+
+  // Motivo em português de gente, com a causa real. Calculado DEPOIS do hook
+  // porque depende do que ele descobriu sobre o conversor de imagem.
+  const unavailableReason = manual
+    ? "Modo manual: você marca cada acerto."
+    : pluginError
+      ? `O conversor de imagem não está neste build: ${pluginError}`
+      : visionBlocked
+        ? "O reconhecimento foi desligado neste aparelho depois de falhas seguidas. Reinstalar o app o reativa."
+        : detector.kind === "unavailable"
+          ? detector.reason
+          : "Preparando o reconhecimento…";
 
   useEffect(() => {
     if (!hasPermission) void requestPermission();
@@ -347,16 +348,33 @@ export function CameraStage({
             achou o cão" de "não tem IA aqui" — duas situações que, sem este
             selo, têm exatamente a mesma aparência na tela. */}
         <View style={styles.statusRow}>
-          <VisionStatusPill
-            detector={detector}
-            fps={fps}
-            confidence={bestConfidence}
-            inferenceMs={inferenceMs}
-            blocked={visionBlocked}
-            manual={manual}
-          />
+          {/* Tocar abre o diagnóstico. Disponível em produção de propósito: um
+              painel atrás de __DEV__ não existe justamente quando o problema
+              aparece — no APK instalado, no aparelho de outra pessoa. */}
+          <Pressable
+            onPress={() => setDebugOpen((open) => !open)}
+            accessibilityRole="button"
+            accessibilityLabel="Diagnóstico da IA"
+            hitSlop={10}
+          >
+            <VisionStatusPill
+              detector={detector}
+              telemetry={telemetry}
+              blocked={visionBlocked}
+              manual={manual}
+            />
+          </Pressable>
         </View>
       </View>
+
+      {debugOpen && (
+        <VisionDebugPanel
+          detector={detector}
+          telemetry={telemetry}
+          analyzing={analyzing}
+          onClose={() => setDebugOpen(false)}
+        />
+      )}
 
       {/* Identificação do cão. Enquanto ela não termina, o treino não começa —
           é o que dá sentido ao "a IA travou o alvo". Sem motor de visão o scan

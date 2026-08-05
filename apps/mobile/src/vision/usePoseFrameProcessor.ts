@@ -24,24 +24,24 @@ import type { DetectorStatus } from "./detector";
  * 1. O modelo do react-native-fast-tflite é um HybridObject do Nitro, apoiado
  *    em `jsi::NativeState`. O runtime de worklet da VisionCamera v4 NÃO acessa
  *    NativeState. É preciso encaixotar com `NitroModules.box()` na thread de JS
- *    e desencaixotar dentro do worklet. Capturar o modelo direto, como estava
- *    aqui, derruba o app no primeiro frame — ou seja, no instante exato em que
- *    o tutor concede a câmera. O próprio README do fast-tflite diz isso.
+ *    e desencaixotar dentro do worklet.
  *
  * 2. `frame.toArrayBuffer()` no Android exige HardwareBuffer e devolve os bytes
- *    NO FORMATO DO FRAME, que por padrão é YUV 4:2:0 — não RGBA. O código
- *    anterior lia como RGBA, com passo de 4 bytes e ignorando `bytesPerRow`.
- *    Além de produzir entrada sem sentido para o modelo, a chamada atravessa
- *    JNI, e exceção Java ali vira exceção C++ dentro de uma host function JSI:
- *    aborta o processo, sem passar por nenhum try/catch de JavaScript.
+ *    no formato do frame, que por padrão é YUV — não RGBA. Por isso a conversão
+ *    de pixels é feita pelo vision-camera-resize-plugin, em nativo (libyuv),
+ *    que entrega float32 já normalizado em 0..1.
  *
- * Por isso a conversão de pixels saiu do JavaScript e voltou para o
- * vision-camera-resize-plugin, que é a peça que o próprio fast-tflite indica.
- * Ele resolve YUV, stride, rotação e escala em nativo (libyuv) e entrega
- * float32 já normalizado em 0..1 — a faixa que o modelo espera.
+ * NENHUM ERRO É ENGOLIDO AQUI, e isso não é preferência de estilo.
  *
- * Ter removido esse plugin foi economia falsa: as linhas de laço de pixel que
- * ele evitava eram exatamente as que fechavam o aplicativo.
+ * A versão anterior tinha `catch {}` vazio em volta do frame inteiro. Com ele,
+ * uma exceção acontecendo em TODO frame — resize recusando o formato, o modelo
+ * recusando o tensor, o unbox falhando — produzia exatamente a mesma tela que
+ * "a IA está olhando e não achou o cão": scanner girando, nada detectado, nada
+ * no log. Erro invisível é erro que sobrevive a builds.
+ *
+ * Agora toda falha é contada, a mensagem sobe para o JavaScript e aparece na
+ * tela. Um frame ruim continua não derrubando a sessão — mas passa a deixar
+ * rastro.
  */
 
 /**
@@ -49,38 +49,27 @@ import type { DetectorStatus } from "./detector";
  *
  * O cão não muda de postura em 33ms, e o RepTracker já exige acordo em 3 de 5
  * leituras. Processar todo frame gastaria bateria sem melhorar a decisão.
- *
- * A contagem vem de um objeto capturado pelo worklet, e não de
- * `frame.timestamp % 3`: timestamp é nanossegundo de relógio monotônico, então
- * o resto era pseudoaleatório — descartava frames de forma irregular em vez de
- * um a cada três.
  */
 const FRAME_SKIP = 3;
 
 /**
- * Quanto girar o frame, no sentido horário, para ele ficar de pé.
+ * Quanto girar o frame, no sentido horário, para ficar de pé.
  *
- * ESTA ERA A FALHA QUE FAZIA A DETECÇÃO NÃO ACONTECER NUNCA.
+ * O buffer do Android vem na orientação do sensor, deitada, enquanto o telefone
+ * é segurado em pé. A VisionCamera informa isso em `frame.orientation`.
  *
- * O buffer que a câmera do Android entrega vem na orientação do SENSOR, que é
- * deitada, enquanto o telefone é segurado em pé. A documentação da VisionCamera
- * diz isso com todas as letras:
+ * MEDIDO, e o resultado corrige uma suposição anterior: este modelo é
+ * TOLERANTE a rotação. Rodando o `dogpose.tflite` contra 30 fotos giradas
+ * (services/ai/scripts/probe_pipeline.py):
  *
- *   "if the phone is held in 'portrait' mode and the Frame's orientation is
- *    'landscape-left', it is 90° rotated relative to the phone's rotation.
- *    To make the frame appear up-right, one would need to counter-rotate it."
+ *   de pé  93% detectado (média 0,85)
+ *   90°    90% (0,80)
+ *   180°   97% (0,78)
+ *   270°   93% (0,78)
  *
- * Sem essa correção o modelo recebia todo cão deitado de lado. Um YOLO treinado
- * com fotos em pé não reconhece a mesma silhueta girada 90° — a confiança
- * despenca para perto de zero, e o aplicativo mostrava "procurando" para
- * sempre, com inferência real rodando o tempo todo. Parecia interface simulada
- * e era o contrário: o modelo trabalhava, olhando para a imagem errada.
- *
- * O plugin gira no sentido horário, e o giro acontece DEPOIS do recorte e da
- * escala. Como o recorte é o quadrado central e o quadrado é simétrico ao giro,
- * girar antes ou depois dá o mesmo resultado — o que permite mapear as
- * coordenadas de volta usando as dimensões já giradas, sem desfazer rotação
- * nenhuma.
+ * Ou seja: girar ajuda um pouco, mas NÃO é o que decide entre detectar e não
+ * detectar. O giro fica porque é barato e correto — a caixa precisa sair no
+ * mesmo espaço que o tutor vê na tela — e não porque resolve falta de detecção.
  */
 type Rotation = "0deg" | "90deg" | "180deg" | "270deg";
 
@@ -91,48 +80,66 @@ const UPRIGHT_ROTATION: Record<string, Rotation> = {
   "landscape-right": "270deg",
 };
 
-/** Uma linha a cada ~10 segundos de análise: o suficiente para diagnosticar. */
+/** Uma amostra a cada ~30 segundos de análise: diagnóstico sem inundar o log. */
 const LOG_EVERY = 100;
+
+/**
+ * Telemetria de um frame analisado.
+ *
+ * Sobe inteira para o JavaScript porque é ela que responde "em que etapa
+ * travou" sem exigir cabo, adb e um computador por perto.
+ */
+export type FrameStats = {
+  /** Confiança da melhor âncora, mesmo abaixo do limiar. */
+  confidence: number;
+  /** Conversão de pixels, em ms. */
+  resizeMs: number;
+  /** Transposição HWC->NCHW, em ms. */
+  prepMs: number;
+  /** Inferência do modelo, em ms. */
+  inferMs: number;
+  /** Decodificação da saída, em ms. */
+  decodeMs: number;
+  /** Frames que chegaram ao processor desde o início da sessão. */
+  seen: number;
+  /** Frames analisados com sucesso. */
+  analyzed: number;
+  /** Frames que levantaram exceção. */
+  failed: number;
+  /** Mensagem da última exceção, ou null. */
+  lastError: string | null;
+  /** Dimensões do frame já girado. */
+  frameWidth: number;
+  frameHeight: number;
+};
 
 export function usePoseFrameProcessor(
   detector: DetectorStatus,
-  /**
-   * `frameWidth`/`frameHeight` acompanham a detecção porque a caixa vem em
-   * pixels do frame, e a UI precisa convertê-la para a tela. Normalizar no
-   * worklet seria tentador e errado: dividir x por largura e y por altura
-   * distorce a razão de aspecto — a característica de maior peso no
-   * classificador de postura.
-   */
-  onDetection: (
-    detection: Detection | null,
-    timestampSeconds: number,
-    frameWidth: number,
-    frameHeight: number,
-    /** Confiança da melhor âncora, mesmo quando nenhuma passou do limiar. */
-    confidence: number,
-    /** Tempo da inferência em milissegundos. */
-    inferenceMs: number,
-  ) => void,
+  onDetection: (detection: Detection | null, timestampSeconds: number, stats: FrameStats) => void,
   /**
    * A trava de laço de crash liberou a análise nesta sessão?
    *
-   * Vem de fora porque a decisão depende do disco, e o disco é assíncrono: ler
-   * aqui dentro faria o primeiro render entregar um processor que talvez não
-   * devesse existir.
+   * Vem de fora porque a decisão depende do disco, e o disco é assíncrono.
    */
   allowed: boolean,
 ) {
-  // O plugin lança se o módulo nativo não estiver no binário. Aqui isso vira
-  // ausência de recurso, e não tela de erro: o treino segue com o tutor
-  // marcando o acerto, que é como o app já se comporta sem modelo.
-  const resize = useMemo(() => {
+  /**
+   * O plugin lança se o módulo nativo não estiver no binário.
+   *
+   * O erro é GUARDADO, e não descartado: sem ele, um build sem o plugin ficaria
+   * indistinguível de um build com o plugin que simplesmente não detecta nada.
+   */
+  const resizePlugin = useMemo(() => {
     try {
-      return createResizePlugin().resize;
-    } catch {
-      return null;
+      return { resize: createResizePlugin().resize, error: null as string | null };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("[AlphaDog] resize-plugin indisponível:", message);
+      return { resize: null, error: message };
     }
   }, []);
 
+  const resize = resizePlugin.resize;
   const model = detector.kind === "ready" ? detector.model : null;
 
   // Regra 1: encaixotar na thread de JS, desencaixotar dentro do worklet.
@@ -146,8 +153,8 @@ export function usePoseFrameProcessor(
   // runtimes distintos.
   const emit = useMemo(() => Worklets.createRunOnJS(onDetection), [onDetection]);
 
-  // Ponte de log. `console.log` dentro do worklet não chega ao logcat: o
-  // runtime da câmera é outro, sem o console da ponte do React Native.
+  // `console.log` dentro do worklet não chega ao logcat: o runtime da câmera é
+  // outro, sem o console da ponte do React Native.
   const log = useMemo(
     () => Worklets.createRunOnJS((message: string) => console.log(message)),
     [],
@@ -155,7 +162,10 @@ export function usePoseFrameProcessor(
 
   // Contadores. Vivem num objeto porque o worklet captura a referência uma vez
   // e a mantém entre invocações — variável solta seria recopiada a cada frame.
-  const counter = useMemo(() => ({ n: 0, logs: 0 }), []);
+  const counter = useMemo(
+    () => ({ n: 0, logs: 0, seen: 0, analyzed: 0, failed: 0, lastError: null as string | null }),
+    [],
+  );
 
   const enabled = allowed && boxedModel != null && resize != null;
 
@@ -164,16 +174,24 @@ export function usePoseFrameProcessor(
       "worklet";
       if (!enabled || boxedModel == null || resize == null) return;
 
+      counter.seen += 1;
       counter.n = (counter.n + 1) % FRAME_SKIP;
       if (counter.n !== 0) return;
+
+      const clock = (globalThis as { performance?: { now?: () => number } }).performance;
+      const now = () => (clock && clock.now ? clock.now() : 0);
+
+      // `stage` diz em QUE etapa a exceção aconteceu. Sem isso, "Cannot read
+      // property of undefined" não distingue conversão de pixels de inferência.
+      let stage = "resize";
+      const t0 = now();
 
       try {
         const rotation = UPRIGHT_ROTATION[frame.orientation] ?? "0deg";
 
-        // Recorte central quadrado + escala para 640x640 + giro para deixar a
-        // imagem de pé, em RGB float32 normalizado, tudo em nativo. Sem `crop`
+        // Recorte central quadrado + escala + giro, tudo em nativo. Sem `crop`
         // explícito o plugin corta o maior quadrado central para casar a
-        // proporção 1:1 do alvo — que é o que preserva a razão de aspecto do cão.
+        // proporção 1:1 do alvo — o que preserva a razão de aspecto do cão.
         const resized = resize(frame, {
           scale: { width: YOLO_INPUT_SIZE, height: YOLO_INPUT_SIZE },
           rotation,
@@ -181,74 +199,108 @@ export function usePoseFrameProcessor(
           dataType: "float32",
         });
 
-        // O modelo declara NCHW; o plugin entrega HWC intercalado. A
-        // transposição é o único trabalho por pixel que sobra em JavaScript.
+        const t1 = now();
+        stage = "preparo";
+
+        // O modelo declara NCHW; o plugin entrega HWC intercalado.
         const plane = YOLO_INPUT_SIZE * YOLO_INPUT_SIZE;
-        const input = new Float32Array(3 * plane);
+        const expected = plane * 3;
+        if (resized.length < expected) {
+          throw new Error(
+            `resize devolveu ${resized.length} valores, esperado ${expected}`,
+          );
+        }
+
+        const input = new Float32Array(expected);
         for (let p = 0, s = 0; p < plane; p++, s += 3) {
           input[p] = resized[s]!;
           input[plane + p] = resized[s + 1]!;
           input[2 * plane + p] = resized[s + 2]!;
         }
 
-        // Relógio lido direto do global: uma função auxiliar precisaria ser
-        // workletizada, e o ganho não paga o risco.
-        const clock = (globalThis as { performance?: { now?: () => number } })
-          .performance;
-        const startedAt = clock && clock.now ? clock.now() : 0;
+        const t2 = now();
+        stage = "inferência";
 
         const tflite = boxedModel.unbox();
         const outputs = tflite.runSync([input.buffer as ArrayBuffer]);
+        if (!outputs || outputs.length === 0) {
+          throw new Error("runSync devolveu saída vazia");
+        }
         const scores = new Float32Array(outputs[0]!);
 
-        // Dimensões do frame JÁ GIRADO. É nesse espaço que a caixa precisa
-        // sair: é ele que corresponde ao que o tutor vê na tela, e é o que a
-        // sobreposição usa para desenhar por cima do cão.
-        // Girar 90° ou 270° troca largura por altura. Comparação inline, e não
-        // função auxiliar: chamar função não workletizada de dentro do worklet
-        // falha em tempo de execução.
+        const t3 = now();
+        stage = "decodificação";
+
+        // Dimensões do frame JÁ GIRADO — é nesse espaço que a caixa precisa
+        // sair, porque é o que corresponde ao que o tutor vê na tela.
         const swaps = rotation === "90deg" || rotation === "270deg";
         const uprightW = swaps ? frame.height : frame.width;
         const uprightH = swaps ? frame.width : frame.height;
 
-        const result = decodeYoloPoseDetailed(
-          scores,
-          centerCropFor(uprightW, uprightH),
-        );
+        const result = decodeYoloPoseDetailed(scores, centerCropFor(uprightW, uprightH));
+        const t4 = now();
 
-        const elapsed =
-          clock && clock.now ? Math.round(clock.now() - startedAt) : 0;
+        counter.analyzed += 1;
 
-        // Amostra periódica com os números que decidem o diagnóstico: se a
-        // confiança fica em 0,00 a entrada está errada; se fica em 0,4x o
-        // limiar é que está apertado. Sem isso, as duas produzem a mesma tela
-        // vazia — foi essa ambiguidade que custou várias builds.
         counter.logs = (counter.logs + 1) % LOG_EVERY;
         if (counter.logs === 1) {
           log(
-            `[AlphaDog] inferência ${elapsed}ms · frame ${frame.width}x${frame.height} ` +
-              `${frame.orientation} -> gira ${rotation} · melhor confiança ` +
-              `${result.confidence.toFixed(3)} · ${result.detection ? "COM cão" : "sem cão"}`,
+            `[AlphaDog] frame ${frame.width}x${frame.height} ${frame.orientation} ` +
+              `gira=${rotation} | resize ${Math.round(t1 - t0)}ms · preparo ${Math.round(t2 - t1)}ms · ` +
+              `inferência ${Math.round(t3 - t2)}ms · decode ${Math.round(t4 - t3)}ms | ` +
+              `confiança ${result.confidence.toFixed(3)} ${result.detection ? "COM cão" : "sem cão"} | ` +
+              `vistos ${counter.seen} analisados ${counter.analyzed} falhas ${counter.failed}`,
           );
         }
 
-        emit(
-          result.detection,
-          frame.timestamp / 1e9,
-          uprightW,
-          uprightH,
-          result.confidence,
-          elapsed,
-        );
-      } catch {
-        // Frame ruim não derruba a sessão. Perder uma leitura custa uma
-        // repetição; travar a câmera custa o treino inteiro.
+        emit(result.detection, frame.timestamp / 1e9, {
+          confidence: result.confidence,
+          resizeMs: Math.round(t1 - t0),
+          prepMs: Math.round(t2 - t1),
+          inferMs: Math.round(t3 - t2),
+          decodeMs: Math.round(t4 - t3),
+          seen: counter.seen,
+          analyzed: counter.analyzed,
+          failed: counter.failed,
+          lastError: counter.lastError,
+          frameWidth: uprightW,
+          frameHeight: uprightH,
+        });
+      } catch (error) {
+        // O frame ruim não derruba a sessão — mas DEIXA RASTRO. Perder uma
+        // leitura custa uma repetição; esconder a causa custou várias builds.
+        counter.failed += 1;
+        const message = error instanceof Error ? error.message : String(error);
+        counter.lastError = `${stage}: ${message}`;
+
+        // Primeira falha sempre registrada; depois, uma a cada LOG_EVERY, para
+        // uma exceção por frame não inundar o log a 10 por segundo.
+        if (counter.failed === 1 || counter.failed % LOG_EVERY === 0) {
+          log(`[AlphaDog] FALHA na etapa "${stage}" (${counter.failed}x): ${message}`);
+        }
+
+        emit(null, frame.timestamp / 1e9, {
+          confidence: 0,
+          resizeMs: 0,
+          prepMs: 0,
+          inferMs: 0,
+          decodeMs: 0,
+          seen: counter.seen,
+          analyzed: counter.analyzed,
+          failed: counter.failed,
+          lastError: counter.lastError,
+          frameWidth: frame.width,
+          frameHeight: frame.height,
+        });
       }
     },
     [enabled, boxedModel, resize, emit, log, counter],
   );
 
-  // undefined quando não há modelo: entregar um processor à câmera sem ter o
-  // que rodar só gastaria bateria copiando frames para lugar nenhum.
-  return enabled ? processor : undefined;
+  return {
+    /** undefined quando não há o que rodar: a câmera não recebe processor. */
+    processor: enabled ? processor : undefined,
+    /** Por que a análise não está ligada, quando não está. */
+    unavailableReason: resizePlugin.error,
+  };
 }
