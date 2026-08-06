@@ -9,7 +9,6 @@
  *      seguinte destrói a confiança do tutor
  */
 
-import type { Posture, PostureReading } from "./posture";
 
 export type ExerciseId =
   | "sit"
@@ -75,18 +74,6 @@ export type Exercise = {
   difficulty: "easy" | "medium" | "hard";
   /** Minutos típicos por sessão. */
   minutes: number;
-  /** Postura que o detector precisa confirmar. */
-  target: Posture;
-  /**
-   * True quando a câmera não julga este exercício — vir, andar junto, olhar,
-   * farejar não são posturas. Hoje todo exercício é marcado pelo tutor (não há
-   * modelo), então a flag só muda o futuro: quando a visão entrar, ela assume os
-   * de postura (sit/down/stay/place) e deixa estes com o tutor. Ser honesto
-   * sobre isso agora evita prometer que a câmera fará o que ela não faz.
-   */
-  manualOnly?: boolean;
-  /** Segundos de permanência para contar como acerto. */
-  holdSeconds: number;
   /** Repetições para concluir a sessão. */
   reps: number;
   steps: ExerciseStep[];
@@ -95,6 +82,13 @@ export type Exercise = {
   /** O que significa "dominar" este exercício — o critério concreto de conclusão. */
   completion: string;
 };
+
+/** Exercício por id. Lança se não existir — id inválido é bug, não estado. */
+export function getExercise(id: ExerciseId): Exercise {
+  const exercise = EXERCISES[id];
+  if (!exercise) throw new Error(`Exercício desconhecido: ${id}`);
+  return exercise;
+}
 
 export const DIFFICULTY_LABEL: Record<Exercise["difficulty"], string> = {
   easy: "Fácil",
@@ -112,8 +106,6 @@ export const EXERCISES: Record<ExerciseId, Exercise> = {
     category: "basico",
     difficulty: "easy",
     minutes: 10,
-    target: "sitting",
-    holdSeconds: 2,
     reps: 5,
     tip: "Não empurre o bumbum dele para baixo. O cão precisa descobrir o movimento sozinho para aprender — se você empurra, ele aprende a esperar ser empurrado.",
     completion: "Ele senta ao comando de voz, sem o petisco como isca, em três sessões seguidas com 80% de acerto.",
@@ -151,9 +143,6 @@ export const EXERCISES: Record<ExerciseId, Exercise> = {
     minutes: 10,
     // O detector confirma a base: sentado. A pata é pequena e some da câmera
     // com frequência, então o app conta a repetição pelo tutor e usa a visão
-    // para garantir que o cão está de fato sentado durante o exercício.
-    target: "sitting",
-    holdSeconds: 2,
     reps: 5,
     tip: "Se ele não levanta a pata, não puxe. Feche a mão com o petisco dentro e espere — a maioria dos cães tenta a pata depois de desistir do focinho.",
     completion: "Ele oferece a pata ao comando, sem você estender a mão primeiro, em três sessões com 80% de acerto.",
@@ -189,8 +178,6 @@ export const EXERCISES: Record<ExerciseId, Exercise> = {
     category: "basico",
     difficulty: "medium",
     minutes: 12,
-    target: "lying",
-    holdSeconds: 3,
     reps: 5,
     tip: "Deitar deixa o cão vulnerável. Se ele hesita, não force: treine em lugar calmo, com piso macio, e aceite meio movimento no começo.",
     completion: "Ele deita ao comando a partir de sentado ou em pé, sem isca, em três sessões com 80% de acerto.",
@@ -226,9 +213,6 @@ export const EXERCISES: Record<ExerciseId, Exercise> = {
     category: "foco",
     difficulty: "easy",
     minutes: 8,
-    target: "standing",
-    manualOnly: true,
-    holdSeconds: 1,
     reps: 6,
     tip: "Não persiga o focinho dele com a mão. Ofereça a mão parada e espere ele vir — se você move a mão atrás do nariz, ensina o cão a fugir dela.",
     completion: "Ele encosta o focinho na sua mão assim que você a apresenta, de qualquer ângulo, em três sessões com 80%.",
@@ -265,9 +249,6 @@ export const EXERCISES: Record<ExerciseId, Exercise> = {
     difficulty: "hard",
     minutes: 12,
     // A câmera pode confirmar que ele continua sentado; o difícil é a duração, e
-    // isso o cronômetro de permanência já mede.
-    target: "sitting",
-    holdSeconds: 5,
     reps: 5,
     tip: "Não aumente distância e tempo ao mesmo tempo. Primeiro ele fica com você colado por mais tempo; só depois você começa a dar um passo para trás. Subir os dois de uma vez é a receita para ele levantar.",
     completion: "Ele mantém a posição por 10 segundos com você a três passos de distância, em três sessões com 80%.",
@@ -303,9 +284,6 @@ export const EXERCISES: Record<ExerciseId, Exercise> = {
     category: "obediencia",
     difficulty: "hard",
     minutes: 10,
-    target: "standing",
-    manualOnly: true,
-    holdSeconds: 1,
     reps: 6,
     tip: 'Nunca chame "vem" para algo ruim — banho, corte de unha, fim do passeio. Se vir até você às vezes termina em algo chato, o cão para de vir. Vir tem que pagar sempre.',
     completion: "Ele vem correndo ao primeiro chamado, com uma distração por perto, em três sessões com 80%.",
@@ -341,9 +319,6 @@ export const EXERCISES: Record<ExerciseId, Exercise> = {
     category: "obediencia",
     difficulty: "hard",
     minutes: 12,
-    target: "standing",
-    manualOnly: true,
-    holdSeconds: 1,
     reps: 8,
     tip: "Guia esticada nunca anda. No instante em que a guia tensiona, pare como uma árvore. O cão aprende que puxar trava o passeio e guia frouxa faz ele andar. Puxar de volta ensina o contrário.",
     completion: "Ele mantém a guia frouxa por uma quadra inteira, com uma distração no caminho, em três sessões.",
@@ -379,9 +354,6 @@ export const EXERCISES: Record<ExerciseId, Exercise> = {
     category: "foco",
     difficulty: "easy",
     minutes: 6,
-    target: "sitting",
-    manualOnly: true,
-    holdSeconds: 2,
     reps: 6,
     tip: "Não repita o nome dele dez vezes. Diga uma vez e espere. Se ele não olhar em alguns segundos, faça um som curto para chamar a atenção — mas nomear em vão ensina o cão a ignorar o próprio nome.",
     completion: "Ele te olha e sustenta o olhar por 2 segundos ao comando, com algo acontecendo em volta, em três sessões.",
@@ -417,9 +389,6 @@ export const EXERCISES: Record<ExerciseId, Exercise> = {
     category: "autocontrole",
     difficulty: "medium",
     minutes: 8,
-    target: "standing",
-    manualOnly: true,
-    holdSeconds: 1,
     reps: 6,
     tip: "Nunca deixe ele pegar o item proibido como recompensa. O prêmio por deixar vem SEMPRE da sua outra mão, com algo melhor. Se deixar o petisco no chão às vezes deixa ele comer o do chão, o comando não pega.",
     completion: "Ele tira o foco do item ao comando e olha para você, com o item à vista, em três sessões com 80%.",
@@ -455,9 +424,6 @@ export const EXERCISES: Record<ExerciseId, Exercise> = {
     category: "autocontrole",
     difficulty: "medium",
     minutes: 5,
-    target: "sitting",
-    manualOnly: true,
-    holdSeconds: 3,
     reps: 4,
     tip: "Se ele levantar quando a tigela desce, a tigela sobe de volta. A comida só encosta no chão enquanto ele fica sentado. Ele aprende em poucos dias que sentar faz a comida descer e levantar faz ela subir.",
     completion: "Ele fica sentado enquanto a tigela desce e só come quando você libera, em três refeições seguidas.",
@@ -493,9 +459,6 @@ export const EXERCISES: Record<ExerciseId, Exercise> = {
     category: "enriquecimento",
     difficulty: "easy",
     minutes: 10,
-    target: "standing",
-    manualOnly: true,
-    holdSeconds: 1,
     reps: 5,
     tip: "Não ajude apontando. Deixe o cão resolver com o nariz — é o trabalho mental que cansa. Apontar transforma um exercício de faro num de seguir o seu dedo.",
     completion: "Ele procura e acha petiscos escondidos pelo cômodo usando só o faro, sem desistir, em três sessões.",
@@ -541,120 +504,4 @@ export const EXERCISE_LIST: Exercise[] = [
 /** Exercícios de uma categoria, na ordem da lista. */
 export function exercisesByCategory(category: ExerciseCategory): Exercise[] {
   return EXERCISE_LIST.filter((e) => e.category === category);
-}
-
-export type Feedback =
-  | "waiting_for_dog"
-  | "not_yet"
-  | "hold"
-  | "success"
-  | "broke_early"
-  | "unclear_view";
-
-export type FeedbackEvent = {
-  feedback: Feedback;
-  /** Segundos restantes de permanência. Alimenta "espere mais dois segundos". */
-  remainingSeconds: number;
-  reason: string;
-};
-
-/** Janela de votação. Ímpar para não haver empate. */
-export const VOTE_WINDOW = 5;
-
-/**
- * Votos necessários dentro da janela.
- *
- * 3 de 5 é deliberadamente exigente: a literatura aponta ~38% dos frames como
- * "casos difíceis", e maioria simples deixaria ruído virar sucesso.
- */
-export const VOTE_THRESHOLD = 3;
-
-/**
- * Acompanha uma repetição.
- *
- * Stateful de propósito: permanência é, por definição, memória.
- */
-export class RepTracker {
-  private votes: Posture[] = [];
-  private holdingSince: number | null = null;
-  private done = false;
-
-  constructor(
-    private readonly target: Posture,
-    private readonly holdSeconds: number,
-  ) {}
-
-  private votedPosture(): Posture {
-    if (!this.votes.length) return "unknown";
-
-    const targetVotes = this.votes.filter((p) => p === this.target).length;
-    if (targetVotes >= VOTE_THRESHOLD) return this.target;
-
-    // Só declara outra postura com a mesma exigência — senão dois frames ruins
-    // derrubariam uma permanência boa.
-    for (const candidate of ["standing", "sitting", "lying"] as const) {
-      if (candidate === this.target) continue;
-      if (this.votes.filter((p) => p === candidate).length >= VOTE_THRESHOLD) {
-        return candidate;
-      }
-    }
-    return "unknown";
-  }
-
-  /**
-   * Consome um frame.
-   *
-   * `timestamp` em segundos, do relógio de captura — frames chegam irregulares
-   * e é o tempo do vídeo que conta, não o de parede.
-   */
-  update(reading: PostureReading, timestamp: number): FeedbackEvent {
-    if (this.done) {
-      return { feedback: "success", remainingSeconds: 0, reason: "já concluído" };
-    }
-
-    this.votes.push(reading.posture);
-    if (this.votes.length > VOTE_WINDOW) this.votes.shift();
-
-    if (this.votes.length < VOTE_WINDOW) {
-      return { feedback: "waiting_for_dog", remainingSeconds: 0, reason: "aguardando frames" };
-    }
-
-    const voted = this.votedPosture();
-
-    if (voted === "unknown") {
-      // Perder a visão não zera a permanência: o cão provavelmente continua
-      // parado, e reiniciar puniria o tutor por um frame ruim.
-      return { feedback: "unclear_view", remainingSeconds: 0, reason: reading.reason };
-    }
-
-    if (voted !== this.target) {
-      if (this.holdingSince !== null) {
-        this.holdingSince = null;
-        return { feedback: "broke_early", remainingSeconds: 0, reason: `saiu para ${voted}` };
-      }
-      return { feedback: "not_yet", remainingSeconds: 0, reason: `está ${voted}` };
-    }
-
-    if (this.holdingSince === null) this.holdingSince = timestamp;
-
-    const elapsed = timestamp - this.holdingSince;
-    const remaining = this.holdSeconds - elapsed;
-
-    if (remaining <= 0) {
-      this.done = true;
-      return { feedback: "success", remainingSeconds: 0, reason: `manteve ${elapsed.toFixed(1)}s` };
-    }
-
-    return { feedback: "hold", remainingSeconds: remaining, reason: "mantendo" };
-  }
-
-  reset(): void {
-    this.votes = [];
-    this.holdingSince = null;
-    this.done = false;
-  }
-
-  get succeeded(): boolean {
-    return this.done;
-  }
 }

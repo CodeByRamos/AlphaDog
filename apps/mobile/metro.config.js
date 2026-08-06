@@ -26,13 +26,4 @@ config.resolver.nodeModulesPaths = [
   ]),
 ];
 
-// O modelo de visão é um arquivo .tflite, extensão que o Metro não reconhece
-// como asset por padrão. Sem esta linha o require() em useDetector.ts não
-// encontra nada, o modelo fica de fora do binário e a IA nunca carrega — no
-// aplicativo isso apareceria só como "este build não inclui o motor de visão",
-// sem nenhum erro de compilação para denunciar a causa.
-config.resolver.assetExts = [
-  ...new Set([...(config.resolver.assetExts ?? []), "tflite", "bin"]),
-];
-
 module.exports = config;

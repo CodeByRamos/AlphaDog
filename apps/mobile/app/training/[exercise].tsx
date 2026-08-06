@@ -2,8 +2,6 @@ import {
   CATEGORY_LABEL,
   DIFFICULTY_LABEL,
   EXERCISES,
-  feedbackText,
-  feedbackTone,
   type ExerciseId,
 } from "@alphadog/core";
 import { Ionicons } from "@expo/vector-icons";
@@ -17,12 +15,11 @@ import { Card } from "../../src/components/Card";
 import { Screen } from "../../src/components/Screen";
 import { saveSession } from "../../src/data/sessions";
 import { useDogData } from "../../src/features/dashboard/useDogData";
-import { useTrainingSession } from "../../src/features/training/useTrainingSession";
 import { useAuth } from "../../src/state/auth";
 import { color, duration, radius, space, type } from "../../src/theme";
 import { ErrorBoundary } from "../../src/components/ErrorBoundary";
-import { useTrainingMode } from "../../src/features/training/useTrainingMode";
-import { useDetector } from "../../src/vision/useDetector";
+import { ExerciseGuideSections } from "../../src/features/training/ExerciseGuideSections";
+import { usePhotoTraining } from "../../src/features/training/usePhotoTraining";
 
 /**
  * A câmera entra por import tardio, e isso não é otimização — é o que mantém o
@@ -50,24 +47,10 @@ export default function TrainingScreen() {
   const { session } = useAuth();
   const { dog } = useDogData();
   const queryClient = useQueryClient();
-  const detector = useDetector();
 
   const exercise = EXERCISES[exerciseParam as ExerciseId] ?? EXERCISES.sit;
   const [phase, setPhase] = useState<Phase>("brief");
-  /**
-   * O modo vive AQUI, e não dentro da CameraStage, porque a sessão também
-   * depende dele: sem detector a máquina de estado precisa de um relógio
-   * próprio para fechar a janela de recompensa e passar de repetição. Duas
-   * cópias do mesmo estado — uma na tela, outra na câmera — divergiriam no
-   * instante em que o tutor trocasse de modo, e a sessão travaria na primeira
-   * repetição sem nenhum erro visível.
-   */
-  const { mode, setMode } = useTrainingMode();
-
-  const training = useTrainingSession(
-    exercise,
-    detector.kind === "ready" && mode === "auto",
-  );
+  const training = usePhotoTraining(exercise);
 
   const save = useMutation({
     mutationFn: (completed: boolean) =>
@@ -160,6 +143,10 @@ export default function TrainingScreen() {
           </Animated.View>
 
           <Animated.View entering={FadeInDown.duration(duration.normal).delay(150)}>
+            <ExerciseGuideSections exercise={exercise} />
+          </Animated.View>
+
+          <Animated.View entering={FadeInDown.duration(duration.normal).delay(180)}>
             <Card style={styles.completion}>
               <Ionicons name="ribbon" size={18} color={color.sage400} />
               <View style={{ flex: 1 }}>
@@ -249,15 +236,12 @@ export default function TrainingScreen() {
         <CameraStage
           exercise={exercise}
           dogName={dog.name}
-          detector={detector}
           state={training.state}
-          onFinish={finish}
+          onCapture={training.submitPhoto}
           onMarkSuccess={training.markSuccess}
-          onFrame={training.pushFrame}
-          mode={mode}
-          onModeChange={setMode}
-          feedbackText={feedbackText(training.state, dog.name)}
-          tone={feedbackTone(training.state.feedback)}
+          onNext={training.next}
+          onRetry={training.retry}
+          onFinish={finish}
         />
       </Suspense>
     </ErrorBoundary>

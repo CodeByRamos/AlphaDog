@@ -1,10 +1,25 @@
-import type { Detection, Exercise, SessionState } from "@alphadog/core";
+import {
+  MIN_ANALYSIS_CONFIDENCE,
+  getExerciseGuide,
+  type Exercise,
+  type PhotoSessionState,
+} from "@alphadog/core";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import Animated, {
+  Easing,
   FadeIn,
+  FadeInDown,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
@@ -16,225 +31,116 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Camera, useCameraDevice, useCameraPermission } from "react-native-vision-camera";
 import { Button } from "../../components/Button";
 import { color, duration, easing, radius, space, type } from "../../theme";
-import type { DetectorStatus } from "../../vision/detector";
-import {
-  beginVisionSession,
-  endVisionSession,
-  markVisionAlive,
-} from "../../vision/pixelPathGuard";
-import {
-  usePoseFrameProcessor,
-  type FrameStats,
-} from "../../vision/usePoseFrameProcessor";
-import { DogOutline } from "./DogOutline";
-import { ScanOverlay } from "./ScanOverlay";
-import { useScanPhase } from "./useScanPhase";
-import type { TrainingMode } from "./useTrainingMode";
-import { useVisionRate } from "./useVisionRate";
-import { VisionDebugPanel } from "./VisionDebugPanel";
-import { VisionStatusPill } from "./VisionStatusPill";
+import { capturePhotoAsBase64 } from "./capture";
+
+/**
+ * Tela de treino.
+ *
+ * A câmera fica aberta durante toda a atividade, como antes — ela é o que faz o
+ * treino parecer treino, e não uma lista de tarefas. O que mudou é quem julga:
+ * em vez de analisar trinta quadros por segundo, o tutor captura UMA foto no
+ * momento em que o cão está executando, e essa foto é avaliada.
+ *
+ * A troca não é só técnica. Analisar vídeo obrigava o tutor a segurar a posição
+ * o tempo suficiente para a detecção estabilizar, com o celular apoiado em
+ * algum lugar. Uma foto é tirada no instante certo, com uma mão só, e avaliada
+ * por um modelo que entende o exercício inteiro — não apenas a postura.
+ */
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-
-type Tone = "neutral" | "progress" | "success" | "warn";
-
-const TONE_COLOR: Record<Tone, string> = {
-  neutral: color.ink300,
-  progress: color.alpha500,
-  success: color.sage400,
-  warn: color.warn500,
-};
 
 type Props = {
   exercise: Exercise;
   dogName: string;
-  detector: DetectorStatus;
-  state: SessionState;
-  onFinish: (completed: boolean) => void;
-  /** O tutor confirmou o acerto. */
+  state: PhotoSessionState;
+  onCapture: (imageBase64: string) => void;
   onMarkSuccess: () => void;
-  /** Cada frame processado pelo modelo de visão. */
-  onFrame: (detection: Detection | null, timestampSeconds: number) => void;
-  feedbackText: string;
-  tone: Tone;
-  /**
-   * Quem julga o acerto. Vem de fora porque a máquina de estado da sessão, que
-   * vive na tela, precisa do mesmo valor — no manual ela roda com relógio
-   * próprio, já que nenhum frame chega para fazê-la avançar.
-   */
-  mode: TrainingMode;
-  onModeChange: (mode: TrainingMode) => void;
+  onNext: () => void;
+  onRetry: () => void;
+  onFinish: (completed: boolean) => void;
 };
-
-/**
- * A análise automática está liberada nesta sessão?
- *
- * `null` enquanto a trava consulta o disco. Montar a câmera antes da resposta
- * anularia a proteção: o processo poderia morrer no primeiro frame sem que a
- * marca tivesse sido gravada, e o laço de crash continuaria.
- */
-function useVisionAllowed(): boolean | null {
-  const [allowed, setAllowed] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    let alive = true;
-    void beginVisionSession().then((ok) => {
-      if (alive) setAllowed(ok);
-    });
-    // Desmontar a tela também é saída limpa: o processo chegou vivo até aqui.
-    // A prova principal, porém, é o primeiro frame analisado — ver
-    // markVisionAlive no handleFrame.
-    return () => {
-      alive = false;
-      void endVisionSession();
-    };
-  }, []);
-
-  return allowed;
-}
 
 export function CameraStage({
   exercise,
   dogName,
-  detector,
   state,
-  onFinish,
+  onCapture,
   onMarkSuccess,
-  onFrame,
-  feedbackText,
-  tone,
-  mode,
-  onModeChange,
+  onNext,
+  onRetry,
+  onFinish,
 }: Props) {
   const insets = useSafeAreaInsets();
   const { hasPermission, requestPermission } = useCameraPermission();
   const device = useCameraDevice("back");
-  const visionAllowed = useVisionAllowed();
+  const camera = useRef<Camera>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const { telemetry, tick } = useVisionRate();
-  const [debugOpen, setDebugOpen] = useState(false);
+  const [capturing, setCapturing] = useState(false);
 
-  /**
-   * A trava desliga a ANÁLISE, não o detector.
-   *
-   * A versão anterior trocava o detector inteiro por "indisponível" enquanto a
-   * trava consultava o disco — e o disco é assíncrono, então o primeiro render
-   * sempre dizia que não havia IA. Agora o estado do modelo é sempre a verdade
-   * sobre o modelo, e a trava só decide se o frame processor entra em campo.
-   */
-  const visionBlocked = visionAllowed === false;
-  const manual = mode === "manual";
-  const analyzing =
-    !manual && visionAllowed === true && detector.kind === "ready";
-
-  const scan = useScanPhase(analyzing);
-  // Dimensões do frame, para o contorno cair sobre o cão na tela. Num ref: muda
-  // uma vez por sessão e não deve provocar render a cada quadro.
-  const frameSize = useRef({ width: 0, height: 0 });
-
-  // Cada frame alimenta o scan e, depois que o alvo está travado, a sessão. A
-  // sessão não recebe frame durante a identificação de propósito: o cronômetro
-  // de permanência começaria a contar antes de o tutor estar pronto.
-  const handleFrame = useCallback(
-    (detection: Detection | null, timestamp: number, stats: FrameStats) => {
-      // Chegar aqui significa que o caminho nativo inteiro sobreviveu a um
-      // frame. É a prova que desarma a trava de laço de crash.
-      markVisionAlive();
-      tick(stats);
-      frameSize.current = { width: stats.frameWidth, height: stats.frameHeight };
-      scan.observe(detection);
-      if (scan.ready) onFrame(detection, timestamp);
-    },
-    [scan, onFrame, tick],
-  );
-
-  const { processor: frameProcessor, unavailableReason: pluginError } =
-    usePoseFrameProcessor(detector, handleFrame, analyzing);
-
-  // Motivo em português de gente, com a causa real. Calculado DEPOIS do hook
-  // porque depende do que ele descobriu sobre o conversor de imagem.
-  const unavailableReason = manual
-    ? "Modo manual: você marca cada acerto."
-    : pluginError
-      ? `O conversor de imagem não está neste build: ${pluginError}`
-      : visionBlocked
-        ? "O reconhecimento foi desligado neste aparelho depois de falhas seguidas. Reinstalar o app o reativa."
-        : detector.kind === "unavailable"
-          ? detector.reason
-          : "Preparando o reconhecimento…";
+  const guide = getExerciseGuide(exercise.id);
 
   useEffect(() => {
     if (!hasPermission) void requestPermission();
   }, [hasPermission, requestPermission]);
 
-  // Conclui sozinho quando todas as repetições saem.
-  //
-  // onFinish vive num ref e o efeito depende SÓ da fase. O motivo: a tela
-  // re-renderiza a cada tick de 200ms e o pai recria onFinish em cada render;
-  // se onFinish fosse dependência, o cleanup cancelaria o timeout de 900ms a
-  // cada tick e ele nunca dispararia — a sessão completava 5/5 e ficava parada
-  // até o tutor encerrar na mão. Foi exatamente esse o bug.
+  // Conclui sozinho quando todas as repetições saem. onFinish vive num ref e o
+  // efeito depende SÓ da fase: o pai recria a função a cada render, e tê-la
+  // como dependência cancelaria o timeout antes de ele disparar.
   const onFinishRef = useRef(onFinish);
   onFinishRef.current = onFinish;
 
   useEffect(() => {
     if (state.phase === "finished") {
-      const t = setTimeout(() => onFinishRef.current(true), 900);
-      return () => clearTimeout(t);
+      const timer = setTimeout(() => onFinishRef.current(true), 900);
+      return () => clearTimeout(timer);
     }
   }, [state.phase]);
 
+  async function handleCapture() {
+    if (capturing || !camera.current) return;
+    setCapturing(true);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    const photo = await capturePhotoAsBase64(camera.current);
+    setCapturing(false);
+
+    if (!photo) {
+      setCameraError("Não consegui tirar a foto. Tente de novo.");
+      return;
+    }
+
+    onCapture(photo);
+  }
+
+  // ------------------------------------------------------------------ prévia
+
   // No navegador não há Vision Camera: o componente é nativo. A sessão roda
-  // igual, sem o vídeo de fundo — é o modo de prévia para os sócios testarem o
-  // fluxo inteiro sem instalar nada. O treino em si nunca dependeu da imagem.
+  // igual, sem vídeo de fundo — é o modo de prévia para testar o fluxo inteiro
+  // sem instalar nada.
   if (Platform.OS === "web") {
     return (
       <View style={[styles.root, styles.webRoot]}>
-        <View style={[styles.scrim, styles.scrimTop, { paddingTop: insets.top + space.md }]}>
-          <View style={styles.topBar}>
-            <Pressable
-              onPress={() => onFinish(false)}
-              hitSlop={16}
-              accessibilityRole="button"
-              accessibilityLabel="Encerrar treino"
-              style={styles.closeBtn}
-            >
-              <Ionicons name="close" size={22} color={color.white} />
-            </Pressable>
-            <View style={styles.repPill}>
-              <Text style={styles.repText}>
-                {state.currentRep} / {state.totalReps}
-              </Text>
-            </View>
-            <View style={styles.successPill}>
-              <Ionicons name="checkmark-circle" size={14} color={color.sage400} />
-              <Text style={styles.successText}>{state.successCount}</Text>
-            </View>
+        <TopBar
+          exercise={exercise}
+          state={state}
+          insets={insets.top}
+          onClose={() => onFinish(false)}
+        />
+        <View style={styles.center}>
+          <View style={styles.notice}>
+            <Text style={[type.overline, { color: color.alpha500 }]}>Prévia web</Text>
+            <Text style={[type.subheading, styles.noticeBody]}>
+              A câmera é nativa e não abre no navegador. Instale o aplicativo
+              para capturar e avaliar as execuções.
+            </Text>
           </View>
         </View>
-
-        <ModelUnavailable
-          exercise={exercise}
-          reason="A prévia pelo navegador não roda o motor de visão — ele é nativo. No aplicativo instalado, o reconhecimento funciona."
-        />
-
-        <View
-          style={[styles.scrim, styles.scrimBottom, { paddingBottom: insets.bottom + space.lg }]}
-        >
-          <MarkSuccessButton
-            disabled={state.phase === "rewarding" || state.phase === "finished"}
-            rewarding={state.phase === "rewarding"}
-            onPress={onMarkSuccess}
-          />
-          <Pressable
-            onPress={() => onFinish(false)}
-            accessibilityRole="button"
-            style={styles.endBtn}
-            hitSlop={8}
-          >
+        <BottomBar insets={insets.bottom}>
+          <Button label="Ele acertou" onPress={onMarkSuccess} />
+          <Pressable onPress={() => onFinish(false)} style={styles.endBtn} hitSlop={8}>
             <Text style={[type.label, { color: color.ink300 }]}>Encerrar sessão</Text>
           </Pressable>
-        </View>
+        </BottomBar>
       </View>
     );
   }
@@ -244,7 +150,7 @@ export function CameraStage({
       <Blocked
         icon="camera-outline"
         title="Precisamos da câmera"
-        body={`Para acompanhar ${dogName} durante o treino. O vídeo é processado no seu aparelho e nunca sai dele.`}
+        body={`Para você fotografar ${dogName} executando o exercício. A foto é enviada apenas para a avaliação e não fica guardada.`}
         action={{ label: "Permitir câmera", onPress: () => void requestPermission() }}
         onClose={() => onFinish(false)}
       />
@@ -262,14 +168,11 @@ export function CameraStage({
     );
   }
 
-  // Falha vinda do nativo — câmera em uso por outro app, permissão revogada no
-  // meio, hardware ocupado. Mostrar é melhor que tela preta: o tutor decide se
-  // tenta de novo ou volta.
   if (cameraError) {
     return (
       <Blocked
         icon="alert-circle-outline"
-        title="A câmera não abriu"
+        title="Problema com a câmera"
         body={`${cameraError}\n\nFeche outros aplicativos que usem a câmera e tente novamente.`}
         action={{ label: "Tentar de novo", onPress: () => setCameraError(null) }}
         onClose={() => onFinish(false)}
@@ -277,184 +180,72 @@ export function CameraStage({
     );
   }
 
+  const analyzing = state.phase === "analyzing";
+  const reviewing = state.phase === "reviewing";
+
   return (
     <View style={styles.root}>
       <Camera
+        ref={camera}
         style={StyleSheet.absoluteFill}
         device={device}
         isActive
-        // Explícito de propósito. É o formato que o CameraX entrega nativamente
-        // e o que o resize-plugin converte com libyuv; pedir "rgb" obrigaria o
-        // CameraX a converter antes, num aparelho de entrada, sem ganho algum.
-        pixelFormat="yuv"
-        // Sem modelo carregado o processor fica de fora: ligá-lo só gastaria
-        // bateria copiando frames para lugar nenhum.
-        frameProcessor={frameProcessor}
-        // Erro de câmera sem tratador é erro que vira tela preta silenciosa. Com
-        // ele o tutor entende que o treino continua no botão.
+        // A câmera existe para fotografar, não para processar vídeo. Sem
+        // frame processor, sem worklet, sem modelo rodando a cada quadro.
+        photo
         onError={(e) => setCameraError(e.message)}
       />
 
-      {/* Contorno sobre o cão real. Fica visível também durante o treino: é a
-          prova contínua, para o tutor, de que a IA continua acompanhando. */}
-      {analyzing && (
-        <DogOutline
-          detection={scan.detection}
-          frameWidth={frameSize.current.width}
-          frameHeight={frameSize.current.height}
-          locked={scan.ready}
-          showKeypoints={__DEV__}
-        />
+      {/* Moldura de enquadramento. Some durante a análise e a revisão para o
+          resultado ficar legível. */}
+      {!analyzing && !reviewing && <FramingGuide />}
+
+      <TopBar
+        exercise={exercise}
+        state={state}
+        insets={insets.top}
+        onClose={() => onFinish(false)}
+      />
+
+      {analyzing && <AnalyzingOverlay />}
+      {reviewing && (
+        <ResultCard state={state} onNext={onNext} onRetry={onRetry} dogName={dogName} />
       )}
 
-      {/* Escurece o topo e a base para o texto ter contraste sobre qualquer cena. */}
-      <View style={[styles.scrim, styles.scrimTop, { paddingTop: insets.top + space.md }]}>
-        <View style={styles.topBar}>
-          <Pressable
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              onFinish(false);
-            }}
-            hitSlop={16}
-            accessibilityRole="button"
-            accessibilityLabel="Encerrar treino"
-            style={styles.closeBtn}
-          >
-            <Ionicons name="close" size={22} color={color.white} />
-          </Pressable>
-
-          {/* Contadores só fazem sentido depois que o treino começou. */}
-          {scan.ready ? (
-            <>
-              <View style={styles.repPill}>
-                <Text style={styles.repText}>
-                  {state.currentRep} / {state.totalReps}
-                </Text>
-              </View>
-
-              <View style={styles.successPill}>
-                <Ionicons name="checkmark-circle" size={14} color={color.sage400} />
-                <Text style={styles.successText}>{state.successCount}</Text>
-              </View>
-            </>
-          ) : (
-            <View style={styles.repPill}>
-              <Text style={styles.repText}>{exercise.name}</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Estado da IA, sempre visível. É o que distingue "analisando e não
-            achou o cão" de "não tem IA aqui" — duas situações que, sem este
-            selo, têm exatamente a mesma aparência na tela. */}
-        <View style={styles.statusRow}>
-          {/* Tocar abre o diagnóstico. Disponível em produção de propósito: um
-              painel atrás de __DEV__ não existe justamente quando o problema
-              aparece — no APK instalado, no aparelho de outra pessoa. */}
-          <Pressable
-            onPress={() => setDebugOpen((open) => !open)}
-            accessibilityRole="button"
-            accessibilityLabel="Diagnóstico da IA"
-            hitSlop={10}
-          >
-            <VisionStatusPill
-              detector={detector}
-              telemetry={telemetry}
-              blocked={visionBlocked}
-              manual={manual}
-            />
-          </Pressable>
-        </View>
-      </View>
-
-      {debugOpen && (
-        <VisionDebugPanel
-          detector={detector}
-          telemetry={telemetry}
-          analyzing={analyzing}
-          onClose={() => setDebugOpen(false)}
-        />
-      )}
-
-      {/* Identificação do cão. Enquanto ela não termina, o treino não começa —
-          é o que dá sentido ao "a IA travou o alvo". Sem motor de visão o scan
-          se resolve na hora, para não trancar o tutor fora do próprio treino. */}
-      {!scan.ready ? (
+      {!analyzing && !reviewing && (
         <>
-          <ScanOverlay
-            detection={scan.detection}
-            locked={scan.phase === "locked"}
-            debug={__DEV__}
-          />
-
-          {/* A porta de saída da espera.
-              Enquanto a IA procura o cão, o treino ainda não começou e não há
-              botão de acerto na tela. Se o modelo não encontrar o animal — luz
-              ruim, cão de costas, ângulo fechado — o tutor ficaria parado numa
-              tela de espera sem nada para tocar. Este atalho resolve isso sem
-              mudar nada do caminho automático: quem for detectado normalmente
-              nunca chega a ver esta tela por tempo suficiente para usá-lo. */}
-          <View
-            style={[
-              styles.scrim,
-              styles.scrimBottom,
-              { paddingBottom: insets.bottom + space.lg },
-            ]}
+          <Animated.View
+            entering={FadeIn.duration(duration.normal)}
+            style={styles.center}
+            pointerEvents="none"
           >
-            <Pressable
-              onPress={() => onModeChange("manual")}
-              accessibilityRole="button"
-              accessibilityLabel="Treinar sem a IA"
-              style={styles.skipBtn}
-              hitSlop={8}
-            >
-              <Ionicons name="hand-left-outline" size={18} color={color.bone} />
+            <View style={styles.instruction}>
+              <Text style={[type.overline, { color: color.alpha500 }]}>
+                Repetição {state.currentRep} de {state.totalReps}
+              </Text>
+              <Text style={[type.subheading, styles.instructionBody]}>
+                Posicione {dogName} conforme as instruções. Quando ele estiver
+                executando o comando corretamente, toque em Capturar foto.
+              </Text>
+              <View style={styles.divider} />
+              <Text style={[type.caption, styles.hint]}>
+                {guide.photoInstruction}
+              </Text>
+            </View>
+          </Animated.View>
+
+          <BottomBar insets={insets.bottom}>
+            <CaptureButton onPress={handleCapture} busy={capturing} />
+            <Pressable onPress={onMarkSuccess} style={styles.secondaryBtn} hitSlop={8}>
+              <Ionicons name="hand-left-outline" size={16} color={color.bone} />
               <Text style={[type.label, { color: color.bone }]}>
-                Treinar sem a IA
+                Marcar acerto sem foto
               </Text>
             </Pressable>
-            <Pressable
-              onPress={() => onFinish(false)}
-              accessibilityRole="button"
-              style={styles.endBtn}
-              hitSlop={8}
-            >
+            <Pressable onPress={() => onFinish(false)} style={styles.endBtn} hitSlop={8}>
               <Text style={[type.label, { color: color.ink300 }]}>Encerrar sessão</Text>
             </Pressable>
-          </View>
-        </>
-      ) : (
-        <>
-          {analyzing ? (
-            <FeedbackBanner text={feedbackText} tone={tone} state={state} />
-          ) : (
-            <ModelUnavailable
-              exercise={exercise}
-              reason={unavailableReason}
-              // Só quem escolheu o manual pode desfazer a escolha aqui. Quando
-              // a IA está indisponível por falha, oferecer "usar a IA" seria
-              // um botão que não cumpre o que promete.
-              onUseAi={manual ? () => onModeChange("auto") : undefined}
-            />
-          )}
-
-          <View
-            style={[styles.scrim, styles.scrimBottom, { paddingBottom: insets.bottom + space.lg }]}
-          >
-            <MarkSuccessButton
-              disabled={state.phase === "rewarding" || state.phase === "finished"}
-              rewarding={state.phase === "rewarding"}
-              onPress={onMarkSuccess}
-            />
-            <Pressable
-              onPress={() => onFinish(false)}
-              accessibilityRole="button"
-              style={styles.endBtn}
-              hitSlop={8}
-            >
-              <Text style={[type.label, { color: color.ink300 }]}>Encerrar sessão</Text>
-            </Pressable>
-          </View>
+          </BottomBar>
         </>
       )}
     </View>
@@ -462,173 +253,261 @@ export function CameraStage({
 }
 
 /**
- * Marcar acerto à mão.
+ * Moldura animada de enquadramento.
  *
- * O botão principal da tela enquanto não há modelo — e continua útil depois: a
- * pata sai do quadro, o cão fica de costas, a luz muda. Sem ele o tutor treina
- * e a sessão vai ao banco como zero acertos, o que é pior que não medir.
- *
- * Grande e embaixo: é para ser alcançado com o polegar, com o cão puxando a
- * guia na outra mão.
+ * Puramente visual, e assumidamente. Ela não detecta nada — orienta o tutor a
+ * deixar o cão inteiro no quadro, que é o erro de foto que mais derruba a
+ * avaliação. Fingir que a moldura "procura" o cão seria simular análise, que é
+ * exatamente o que este produto não faz.
  */
-function MarkSuccessButton({
-  disabled,
-  rewarding,
-  onPress,
+function FramingGuide() {
+  const pulse = useSharedValue(0);
+
+  useEffect(() => {
+    pulse.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 1600, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0, { duration: 1600, easing: Easing.inOut(Easing.ease) }),
+      ),
+      -1,
+      true,
+    );
+  }, [pulse]);
+
+  const animated = useAnimatedStyle(() => ({ opacity: 0.35 + pulse.value * 0.4 }));
+
+  return (
+    <View style={styles.framing} pointerEvents="none">
+      <Animated.View style={[styles.frame, animated]}>
+        <View style={[styles.corner, styles.cornerTL]} />
+        <View style={[styles.corner, styles.cornerTR]} />
+        <View style={[styles.corner, styles.cornerBL]} />
+        <View style={[styles.corner, styles.cornerBR]} />
+      </Animated.View>
+    </View>
+  );
+}
+
+function AnalyzingOverlay() {
+  return (
+    <Animated.View
+      entering={FadeIn.duration(duration.fast)}
+      style={styles.analyzing}
+      pointerEvents="none"
+    >
+      <ActivityIndicator size="large" color={color.alpha500} />
+      <Text style={[type.subheading, styles.analyzingText]}>
+        Analisando execução…
+      </Text>
+      <Text style={[type.caption, { color: color.ink400, textAlign: "center" }]}>
+        Comparando a foto com os critérios deste exercício
+      </Text>
+    </Animated.View>
+  );
+}
+
+/**
+ * Resultado da análise.
+ *
+ * Mostra os critérios um a um, com o que o modelo observou em cada. É o que
+ * transforma "não passou" em algo acionável: o tutor vê exatamente qual ponto
+ * faltou, e não uma nota sem explicação.
+ */
+function ResultCard({
+  state,
+  onNext,
+  onRetry,
+  dogName,
 }: {
-  disabled: boolean;
-  rewarding: boolean;
-  onPress: () => void;
+  state: PhotoSessionState;
+  onNext: () => void;
+  onRetry: () => void;
+  dogName: string;
 }) {
+  const result = state.lastResult;
+  const manual = state.lastWasManual;
+
+  const approved = manual || (result?.success === true && result.confidence >= MIN_ANALYSIS_CONFIDENCE);
+  const inconclusive = !manual && result != null && result.confidence < MIN_ANALYSIS_CONFIDENCE;
+
+  return (
+    <Animated.View entering={FadeInDown.duration(duration.normal)} style={styles.resultWrap}>
+      <View style={styles.resultCard}>
+        <View style={styles.resultHeader}>
+          <View
+            style={[
+              styles.resultBadge,
+              {
+                backgroundColor: approved
+                  ? "rgba(122,168,116,0.18)"
+                  : inconclusive
+                    ? "rgba(148,163,184,0.18)"
+                    : "rgba(217,119,66,0.18)",
+              },
+            ]}
+          >
+            <Ionicons
+              name={
+                approved
+                  ? "checkmark-circle"
+                  : inconclusive
+                    ? "help-circle-outline"
+                    : "refresh-circle-outline"
+              }
+              size={26}
+              color={approved ? color.sage400 : inconclusive ? color.ink300 : color.warn500}
+            />
+          </View>
+          <Text style={[type.heading, styles.resultTitle]}>
+            {manual
+              ? "Acerto marcado"
+              : approved
+                ? "Muito bem!"
+                : inconclusive
+                  ? "Não deu para avaliar"
+                  : "Quase lá"}
+          </Text>
+        </View>
+
+        <Text style={[type.body, styles.resultFeedback]}>
+          {manual
+            ? `Você confirmou o acerto de ${dogName}. Recompense agora.`
+            : (result?.feedback ?? "")}
+        </Text>
+
+        {result?.tips ? (
+          <View style={styles.tipBox}>
+            <Ionicons name="bulb-outline" size={16} color={color.alpha500} />
+            <Text style={[type.caption, styles.tipText]}>{result.tips}</Text>
+          </View>
+        ) : null}
+
+        {result && result.criteria.length > 0 ? (
+          <ScrollView style={styles.criteriaList} contentContainerStyle={{ gap: 8 }}>
+            {result.criteria.map((item) => (
+              <View key={item.criterion} style={styles.criterionRow}>
+                <Ionicons
+                  name={item.met ? "checkmark-circle" : "close-circle-outline"}
+                  size={16}
+                  color={item.met ? color.sage400 : color.ink500}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={[type.caption, { color: color.bone }]}>
+                    {item.criterion}
+                  </Text>
+                  {!item.met && item.observation ? (
+                    <Text style={[type.caption, { color: color.ink400 }]}>
+                      {item.observation}
+                    </Text>
+                  ) : null}
+                </View>
+              </View>
+            ))}
+          </ScrollView>
+        ) : null}
+
+        <View style={styles.resultActions}>
+          {/* Repetir a foto NÃO consome a repetição: foto ruim é problema de
+              enquadramento, não erro do cão. */}
+          {!manual && (
+            <Pressable onPress={onRetry} style={styles.retryBtn} hitSlop={8}>
+              <Ionicons name="camera-reverse-outline" size={18} color={color.bone} />
+              <Text style={[type.label, { color: color.bone }]}>Nova foto</Text>
+            </Pressable>
+          )}
+          <Button
+            label={state.currentRep >= state.totalReps ? "Concluir" : "Próxima"}
+            onPress={onNext}
+          />
+        </View>
+      </View>
+    </Animated.View>
+  );
+}
+
+function CaptureButton({ onPress, busy }: { onPress: () => void; busy: boolean }) {
   const scale = useSharedValue(1);
   const animated = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
   return (
     <AnimatedPressable
       onPressIn={() => {
-        if (disabled) return;
         scale.value = withSpring(0.95, easing.spring);
       }}
       onPressOut={() => {
         scale.value = withSpring(1, easing.springBouncy);
       }}
-      onPress={() => {
-        if (disabled) return;
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        onPress();
-      }}
-      disabled={disabled}
+      onPress={onPress}
+      disabled={busy}
       accessibilityRole="button"
-      accessibilityLabel="Ele acertou"
-      accessibilityState={{ disabled }}
-      style={[styles.markBtn, rewarding && styles.markBtnDone, animated]}
+      accessibilityLabel="Capturar foto"
+      style={[styles.captureBtn, animated]}
     >
-      <Ionicons
-        name={rewarding ? "checkmark-circle" : "paw"}
-        size={22}
-        color={color.ink900}
-      />
-      <Text style={[type.subheading, { color: color.ink900 }]}>
-        {rewarding ? "Recompense agora!" : "Ele acertou"}
-      </Text>
+      {busy ? (
+        <ActivityIndicator color={color.ink900} />
+      ) : (
+        <>
+          <Ionicons name="camera" size={22} color={color.ink900} />
+          <Text style={[type.subheading, { color: color.ink900 }]}>Capturar foto</Text>
+        </>
+      )}
     </AnimatedPressable>
   );
 }
 
-/**
- * Estado sem modelo de visão.
- *
- * Deliberadamente NÃO simula detecção. Seria fácil sortear posturas e a demo
- * pareceria pronta — e um "Excelente!" sem o cão ter sentado ensina o tutor a
- * recompensar o comportamento errado. O app passaria a piorar o treino.
- *
- * A sessão funciona mesmo assim: câmera ligada, passos à mão, e o tutor marca o
- * acerto. É honesto e é útil — quem julga é quem está vendo o cão.
- */
-function ModelUnavailable({
+function TopBar({
   exercise,
-  reason,
-  onUseAi,
+  state,
+  insets,
+  onClose,
 }: {
   exercise: Exercise;
-  reason: string;
-  /** Volta para o reconhecimento automático. Ausente quando ele não está disponível. */
-  onUseAi?: () => void;
+  state: PhotoSessionState;
+  insets: number;
+  onClose: () => void;
 }) {
-  // O passo do meio é onde o tutor trava: os primeiros são preparação, o
-  // último é consolidação.
-  const step = exercise.steps[1] ?? exercise.steps[0];
-
   return (
-    <Animated.View entering={FadeIn.duration(duration.normal)} style={styles.center}>
-      <View style={styles.notice}>
-        <Text style={[type.overline, { color: color.alpha500 }]}>
-          {step?.title ?? exercise.name}
-        </Text>
-        <Text style={[type.subheading, styles.noticeBody]}>{step?.body ?? ""}</Text>
-        <View style={styles.divider} />
-        {/* Motivo concreto, e não promessa. O texto anterior dizia que o
-            reconhecimento "chega em breve" — o recurso está no aparelho, e
-            dizer o contrário transformava uma falha diagnosticável em
-            funcionalidade futura. */}
-        <Text style={[type.caption, { color: color.ink400, textAlign: "center" }]}>
-          {reason}
-        </Text>
-        <Text style={[type.caption, { color: color.ink400, textAlign: "center" }]}>
-          Toque em “Ele acertou” quando {exercise.name.toLowerCase()} sair.
-        </Text>
-        {onUseAi ? (
-          <Pressable
-            onPress={onUseAi}
-            accessibilityRole="button"
-            style={styles.useAiBtn}
-            hitSlop={8}
-          >
-            <Ionicons name="eye-outline" size={16} color={color.alpha500} />
-            <Text style={[type.label, { color: color.alpha500 }]}>
-              Usar o reconhecimento
-            </Text>
-          </Pressable>
-        ) : null}
+    <View style={[styles.scrim, styles.scrimTop, { paddingTop: insets + space.md }]}>
+      <View style={styles.topBar}>
+        <Pressable
+          onPress={() => {
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            onClose();
+          }}
+          hitSlop={16}
+          accessibilityRole="button"
+          accessibilityLabel="Encerrar treino"
+          style={styles.closeBtn}
+        >
+          <Ionicons name="close" size={22} color={color.white} />
+        </Pressable>
+
+        <View style={styles.repPill}>
+          <Text style={styles.repText}>
+            {state.currentRep} / {state.totalReps}
+          </Text>
+        </View>
+
+        <View style={styles.successPill}>
+          <Ionicons name="checkmark-circle" size={14} color={color.sage400} />
+          <Text style={styles.successText}>{state.successCount}</Text>
+        </View>
       </View>
-    </Animated.View>
+      <Text style={[type.caption, styles.exerciseName]}>{exercise.name}</Text>
+    </View>
   );
 }
 
-function FeedbackBanner({
-  text,
-  tone,
-  state,
+function BottomBar({
+  insets,
+  children,
 }: {
-  text: string;
-  tone: Tone;
-  state: SessionState;
+  insets: number;
+  children: React.ReactNode;
 }) {
-  const pulse = useSharedValue(1);
-  const lastTone = useRef(tone);
-
-  useEffect(() => {
-    if (tone === "success" && lastTone.current !== "success") {
-      pulse.value = withSequence(
-        withSpring(1.12, easing.springBouncy),
-        withSpring(1, easing.spring),
-      );
-    }
-    lastTone.current = tone;
-  }, [tone, pulse]);
-
-  // Pulsa devagar durante a permanência: dá ao tutor um metrônomo visual sem
-  // exigir que ele leia o número.
-  useEffect(() => {
-    if (state.feedback === "hold") {
-      pulse.value = withRepeat(
-        withSequence(
-          withTiming(1.03, { duration: 500 }),
-          withTiming(1, { duration: 500 }),
-        ),
-        -1,
-        true,
-      );
-    }
-  }, [state.feedback, pulse]);
-
-  const animated = useAnimatedStyle(() => ({ transform: [{ scale: pulse.value }] }));
-
   return (
-    <View style={styles.center} pointerEvents="none">
-      <Animated.View
-        style={[styles.banner, { borderColor: TONE_COLOR[tone] }, animated]}
-        accessibilityLiveRegion="polite"
-        accessible
-        accessibilityLabel={text}
-      >
-        <Text style={[type.heading, { color: TONE_COLOR[tone], textAlign: "center" }]}>
-          {text}
-        </Text>
-        {state.feedback === "hold" && state.remainingSeconds > 0 ? (
-          <Text style={styles.countdown}>{Math.ceil(state.remainingSeconds)}</Text>
-        ) : null}
-      </Animated.View>
+    <View style={[styles.scrim, styles.scrimBottom, { paddingBottom: insets + space.lg }]}>
+      {children}
     </View>
   );
 }
@@ -664,46 +543,17 @@ function Blocked({
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.ink950 },
-  // Sem vídeo de fundo, a tela precisa distribuir o conteúdo sozinha.
   webRoot: { justifyContent: "space-between" },
   scrim: { position: "absolute", left: 0, right: 0, paddingHorizontal: space.lg },
-  scrimTop: { top: 0, paddingBottom: space.lg, backgroundColor: "rgba(5,7,11,0.55)" },
+  scrimTop: { top: 0, paddingBottom: space.md, backgroundColor: "rgba(5,7,11,0.55)" },
   scrimBottom: {
     bottom: 0,
     paddingTop: space.lg,
     backgroundColor: "rgba(5,7,11,0.55)",
     gap: space.sm,
   },
-  markBtn: {
-    height: 60,
-    borderRadius: radius.lg,
-    backgroundColor: color.alpha500,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: space.sm,
-  },
-  markBtnDone: { backgroundColor: color.sage400 },
-  endBtn: { alignItems: "center", paddingVertical: space.md },
-  skipBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: space.sm,
-    height: 52,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: color.ink700,
-    backgroundColor: "rgba(0,0,0,0.45)",
-  },
-  useAiBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingTop: space.sm,
-  },
   topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  statusRow: { marginTop: space.sm, alignItems: "center" },
+  exerciseName: { color: color.ink300, textAlign: "center", marginTop: 6 },
   closeBtn: {
     width: 38,
     height: 38,
@@ -718,7 +568,12 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     backgroundColor: "rgba(0,0,0,0.4)",
   },
-  repText: { fontFamily: "Sora_800ExtraBold", fontSize: 15, color: color.white, fontVariant: ["tabular-nums"] },
+  repText: {
+    fontFamily: "Sora_800ExtraBold",
+    fontSize: 15,
+    color: color.white,
+    fontVariant: ["tabular-nums"],
+  },
   successPill: {
     flexDirection: "row",
     alignItems: "center",
@@ -729,23 +584,122 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.4)",
   },
   successText: { fontFamily: "Sora_800ExtraBold", fontSize: 14, color: color.white },
-  center: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center", padding: space.xl },
-  banner: {
-    backgroundColor: "rgba(5,7,11,0.82)",
-    borderWidth: 2,
-    borderRadius: radius.xl,
-    paddingHorizontal: space.xl,
-    paddingVertical: space.lg,
+
+  framing: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
+  frame: { width: "78%", aspectRatio: 1 },
+  corner: {
+    position: "absolute",
+    width: 34,
+    height: 34,
+    borderColor: color.alpha500,
+  },
+  cornerTL: { top: 0, left: 0, borderTopWidth: 3, borderLeftWidth: 3, borderTopLeftRadius: 10 },
+  cornerTR: { top: 0, right: 0, borderTopWidth: 3, borderRightWidth: 3, borderTopRightRadius: 10 },
+  cornerBL: { bottom: 0, left: 0, borderBottomWidth: 3, borderLeftWidth: 3, borderBottomLeftRadius: 10 },
+  cornerBR: { bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3, borderBottomRightRadius: 10 },
+
+  center: {
+    ...StyleSheet.absoluteFillObject,
     alignItems: "center",
+    justifyContent: "flex-end",
+    padding: space.xl,
+    paddingBottom: 200,
+  },
+  instruction: {
+    backgroundColor: "rgba(5,7,11,0.88)",
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: color.ink700,
+    padding: space.lg,
     gap: space.sm,
-    minWidth: 220,
+    alignItems: "center",
+    maxWidth: 360,
   },
-  countdown: {
-    fontFamily: "Sora_800ExtraBold",
-    fontSize: 44,
-    color: color.white,
-    fontVariant: ["tabular-nums"],
+  instructionBody: { color: color.bone, textAlign: "center" },
+  hint: { color: color.ink400, textAlign: "center" },
+  divider: { height: 1, alignSelf: "stretch", backgroundColor: color.ink700 },
+
+  analyzing: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(5,7,11,0.82)",
+    gap: space.md,
+    padding: space.xl,
   },
+  analyzingText: { color: color.bone, textAlign: "center" },
+
+  resultWrap: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "flex-end",
+    padding: space.lg,
+    backgroundColor: "rgba(5,7,11,0.7)",
+  },
+  resultCard: {
+    backgroundColor: "rgba(5,7,11,0.97)",
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: color.ink700,
+    padding: space.lg,
+    gap: space.md,
+    maxHeight: "82%",
+  },
+  resultHeader: { flexDirection: "row", alignItems: "center", gap: space.md },
+  resultBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.pill,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  resultTitle: { color: color.bone, flex: 1 },
+  resultFeedback: { color: color.ink300 },
+  tipBox: {
+    flexDirection: "row",
+    gap: space.sm,
+    padding: space.md,
+    borderRadius: radius.lg,
+    backgroundColor: "rgba(217,119,66,0.10)",
+    borderWidth: 1,
+    borderColor: "rgba(217,119,66,0.28)",
+  },
+  tipText: { color: color.bone, flex: 1, lineHeight: 18 },
+  criteriaList: { maxHeight: 180 },
+  criterionRow: { flexDirection: "row", gap: space.sm, alignItems: "flex-start" },
+  resultActions: { gap: space.sm },
+  retryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: space.sm,
+    height: 48,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: color.ink700,
+  },
+
+  captureBtn: {
+    height: 62,
+    borderRadius: radius.lg,
+    backgroundColor: color.alpha500,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: space.sm,
+  },
+  secondaryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: space.sm,
+    height: 46,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: color.ink700,
+    backgroundColor: "rgba(0,0,0,0.35)",
+  },
+  endBtn: { alignItems: "center", paddingVertical: space.sm },
+
   notice: {
     backgroundColor: "rgba(5,7,11,0.88)",
     borderRadius: radius.xl,
@@ -757,8 +711,14 @@ const styles = StyleSheet.create({
     maxWidth: 340,
   },
   noticeBody: { color: color.ink300, textAlign: "center" },
-  divider: { height: 1, alignSelf: "stretch", backgroundColor: color.ink700, marginVertical: space.sm },
+
   blocked: { flex: 1, backgroundColor: color.ink900 },
   blockedClose: { padding: space.lg, alignSelf: "flex-start" },
-  blockedBody: { flex: 1, justifyContent: "center", alignItems: "center", padding: space.xl, gap: space.lg },
+  blockedBody: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: space.xl,
+    gap: space.lg,
+  },
 });
